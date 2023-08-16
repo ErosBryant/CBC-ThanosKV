@@ -4,12 +4,10 @@
 
 #include <sys/types.h>
 
-#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 
 #include "leveldb/cache.h"
-#include "leveldb/comparator.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
@@ -36,7 +34,6 @@
 //      readmissing   -- read N missing keys in random order
 //      readhot       -- read N times in random order from 1% section of DB
 //      seekrandom    -- N random seeks
-//      seekordered   -- N ordered seeks
 //      open          -- cost of opening a DB
 //      crc32c        -- repeated crc32c of 4K of data
 //   Meta operations:
@@ -60,9 +57,7 @@ static const char* FLAGS_benchmarks =
     "fill100K,"
     "crc32c,"
     "snappycomp,"
-    "snappyuncomp,"
-    "zstdcomp,"
-    "zstduncomp,";
+    "snappyuncomp,";
 
 // Number of key/values to place in database
 static int FLAGS_num = 1000000;
@@ -82,9 +77,6 @@ static double FLAGS_compression_ratio = 0.5;
 
 // Print histogram of operation timings
 static bool FLAGS_histogram = false;
-
-// Count the number of string comparisons performed
-static bool FLAGS_comparisons = false;
 
 // Number of bytes to buffer in memtable before compacting
 // (initialized to default value by "main")
@@ -109,9 +101,6 @@ static int FLAGS_open_files = 0;
 // Negative means use default settings.
 static int FLAGS_bloom_bits = -1;
 
-// Common key prefix length.
-static int FLAGS_key_prefix = 0;
-
 // If true, do not destroy the existing database.  If you set this
 // flag and also specify a benchmark that wants a fresh database, that
 // benchmark will fail.
@@ -120,46 +109,23 @@ static bool FLAGS_use_existing_db = false;
 // If true, reuse existing log/MANIFEST files when re-opening a database.
 static bool FLAGS_reuse_logs = false;
 
-// If true, use compression.
-static bool FLAGS_compression = true;
+static int FLAGS_bits_per_key = 16;
+
+static int FLAGS_keys_per_datatable = 65536;
+
+static int FLAGS_dram_node = 0;
+
+static int FLAGS_nvm_node = 2;
+
+static int FLAGS_nvm_next_node = 4;
 
 // Use the db with the following name.
-static const char* FLAGS_db = nullptr;
-
-// ZSTD compression level to try out
-static int FLAGS_zstd_compression_level = 1;
+static const char* FLAGS_db = NULL;
 
 namespace leveldb {
 
 namespace {
 leveldb::Env* g_env = nullptr;
-
-class CountComparator : public Comparator {
- public:
-  CountComparator(const Comparator* wrapped) : wrapped_(wrapped) {}
-  ~CountComparator() override {}
-  int Compare(const Slice& a, const Slice& b) const override {
-    count_.fetch_add(1, std::memory_order_relaxed);
-    return wrapped_->Compare(a, b);
-  }
-  const char* Name() const override { return wrapped_->Name(); }
-  void FindShortestSeparator(std::string* start,
-                             const Slice& limit) const override {
-    wrapped_->FindShortestSeparator(start, limit);
-  }
-
-  void FindShortSuccessor(std::string* key) const override {
-    return wrapped_->FindShortSuccessor(key);
-  }
-
-  size_t comparisons() const { return count_.load(std::memory_order_relaxed); }
-
-  void reset() { count_.store(0, std::memory_order_relaxed); }
-
- private:
-  mutable std::atomic<size_t> count_{0};
-  const Comparator* const wrapped_;
-};
 
 // Helper for quickly generating random data.
 class RandomGenerator {
@@ -193,26 +159,6 @@ class RandomGenerator {
   }
 };
 
-class KeyBuffer {
- public:
-  KeyBuffer() {
-    assert(FLAGS_key_prefix < sizeof(buffer_));
-    memset(buffer_, 'a', FLAGS_key_prefix);
-  }
-  KeyBuffer& operator=(KeyBuffer& other) = delete;
-  KeyBuffer(KeyBuffer& other) = delete;
-
-  void Set(int k) {
-    std::snprintf(buffer_ + FLAGS_key_prefix,
-                  sizeof(buffer_) - FLAGS_key_prefix, "%016d", k);
-  }
-
-  Slice slice() const { return Slice(buffer_, FLAGS_key_prefix + 16); }
-
- private:
-  char buffer_[1024];
-};
-
 #if defined(__linux)
 static Slice TrimSpace(Slice s) {
   size_t start = 0;
@@ -225,6 +171,7 @@ static Slice TrimSpace(Slice s) {
   }
   return Slice(s.data() + start, limit - start);
 }
+
 #endif
 
 static void AppendWithSpace(std::string* str, Slice msg) {
@@ -369,59 +316,8 @@ struct ThreadState {
   Stats stats;
   SharedState* shared;
 
-  ThreadState(int index, int seed) : tid(index), rand(seed), shared(nullptr) {}
+  ThreadState(int index) : tid(index), rand(1000 + index), shared(nullptr) {}
 };
-
-void Compress(
-    ThreadState* thread, std::string name,
-    std::function<bool(const char*, size_t, std::string*)> compress_func) {
-  RandomGenerator gen;
-  Slice input = gen.Generate(Options().block_size);
-  int64_t bytes = 0;
-  int64_t produced = 0;
-  bool ok = true;
-  std::string compressed;
-  while (ok && bytes < 1024 * 1048576) {  // Compress 1G
-    ok = compress_func(input.data(), input.size(), &compressed);
-    produced += compressed.size();
-    bytes += input.size();
-    thread->stats.FinishedSingleOp();
-  }
-
-  if (!ok) {
-    thread->stats.AddMessage("(" + name + " failure)");
-  } else {
-    char buf[100];
-    std::snprintf(buf, sizeof(buf), "(output: %.1f%%)",
-                  (produced * 100.0) / bytes);
-    thread->stats.AddMessage(buf);
-    thread->stats.AddBytes(bytes);
-  }
-}
-
-void Uncompress(
-    ThreadState* thread, std::string name,
-    std::function<bool(const char*, size_t, std::string*)> compress_func,
-    std::function<bool(const char*, size_t, char*)> uncompress_func) {
-  RandomGenerator gen;
-  Slice input = gen.Generate(Options().block_size);
-  std::string compressed;
-  bool ok = compress_func(input.data(), input.size(), &compressed);
-  int64_t bytes = 0;
-  char* uncompressed = new char[input.size()];
-  while (ok && bytes < 1024 * 1048576) {  // Compress 1G
-    ok = uncompress_func(compressed.data(), compressed.size(), uncompressed);
-    bytes += input.size();
-    thread->stats.FinishedSingleOp();
-  }
-  delete[] uncompressed;
-
-  if (!ok) {
-    thread->stats.AddMessage("(" + name + " failure)");
-  } else {
-    thread->stats.AddBytes(bytes);
-  }
-}
 
 }  // namespace
 
@@ -436,11 +332,9 @@ class Benchmark {
   WriteOptions write_options_;
   int reads_;
   int heap_counter_;
-  CountComparator count_comparator_;
-  int total_thread_count_;
 
   void PrintHeader() {
-    const int kKeySize = 16 + FLAGS_key_prefix;
+    const int kKeySize = 16;
     PrintEnvironment();
     std::fprintf(stdout, "Keys:       %d bytes each\n", kKeySize);
     std::fprintf(
@@ -528,9 +422,7 @@ class Benchmark {
         value_size_(FLAGS_value_size),
         entries_per_batch_(1),
         reads_(FLAGS_reads < 0 ? FLAGS_num : FLAGS_reads),
-        heap_counter_(0),
-        count_comparator_(BytewiseComparator()),
-        total_thread_count_(0) {
+        heap_counter_(0) {
     std::vector<std::string> files;
     g_env->GetChildren(FLAGS_db, &files);
     for (size_t i = 0; i < files.size(); i++) {
@@ -538,9 +430,11 @@ class Benchmark {
         g_env->RemoveFile(std::string(FLAGS_db) + "/" + files[i]);
       }
     }
+
     if (!FLAGS_use_existing_db) {
       DestroyDB(FLAGS_db, Options());
     }
+
   }
 
   ~Benchmark() {
@@ -613,8 +507,6 @@ class Benchmark {
         method = &Benchmark::ReadMissing;
       } else if (name == Slice("seekrandom")) {
         method = &Benchmark::SeekRandom;
-      } else if (name == Slice("seekordered")) {
-        method = &Benchmark::SeekOrdered;
       } else if (name == Slice("readhot")) {
         method = &Benchmark::ReadHot;
       } else if (name == Slice("readrandomsmall")) {
@@ -635,17 +527,13 @@ class Benchmark {
         method = &Benchmark::SnappyCompress;
       } else if (name == Slice("snappyuncomp")) {
         method = &Benchmark::SnappyUncompress;
-      } else if (name == Slice("zstdcomp")) {
-        method = &Benchmark::ZstdCompress;
-      } else if (name == Slice("zstduncomp")) {
-        method = &Benchmark::ZstdUncompress;
       } else if (name == Slice("heapprofile")) {
         HeapProfile();
       } else if (name == Slice("stats")) {
         PrintStats("leveldb.stats");
       } else if (name == Slice("sstables")) {
         PrintStats("leveldb.sstables");
-      } else {
+	  }else {
         if (!name.empty()) {  // No error message for empty name
           std::fprintf(stderr, "unknown benchmark '%s'\n",
                        name.ToString().c_str());
@@ -716,11 +604,7 @@ class Benchmark {
       arg[i].bm = this;
       arg[i].method = method;
       arg[i].shared = &shared;
-      ++total_thread_count_;
-      // Seed the thread's random state deterministically based upon thread
-      // creation across all benchmarks. This ensures that the seeds are unique
-      // but reproducible when rerunning the same set of benchmarks.
-      arg[i].thread = new ThreadState(i, /*seed=*/1000 + total_thread_count_);
+      arg[i].thread = new ThreadState(i);
       arg[i].thread->shared = &shared;
       g_env->StartThread(ThreadBody, &arg[i]);
     }
@@ -741,11 +625,6 @@ class Benchmark {
       arg[0].thread->stats.Merge(arg[i].thread->stats);
     }
     arg[0].thread->stats.Report(name);
-    if (FLAGS_comparisons) {
-      fprintf(stdout, "Comparisons: %zu\n", count_comparator_.comparisons());
-      count_comparator_.reset();
-      fflush(stdout);
-    }
 
     for (int i = 0; i < n; i++) {
       delete arg[i].thread;
@@ -773,30 +652,50 @@ class Benchmark {
   }
 
   void SnappyCompress(ThreadState* thread) {
-    Compress(thread, "snappy", &port::Snappy_Compress);
+    RandomGenerator gen;
+    Slice input = gen.Generate(Options().block_size);
+    int64_t bytes = 0;
+    int64_t produced = 0;
+    bool ok = true;
+    std::string compressed;
+    while (ok && bytes < 1024 * 1048576) {  // Compress 1G
+      ok = port::Snappy_Compress(input.data(), input.size(), &compressed);
+      produced += compressed.size();
+      bytes += input.size();
+      thread->stats.FinishedSingleOp();
+    }
+
+    if (!ok) {
+      thread->stats.AddMessage("(snappy failure)");
+    } else {
+      char buf[100];
+      std::snprintf(buf, sizeof(buf), "(output: %.1f%%)",
+                    (produced * 100.0) / bytes);
+      thread->stats.AddMessage(buf);
+      thread->stats.AddBytes(bytes);
+    }
   }
 
   void SnappyUncompress(ThreadState* thread) {
-    Uncompress(thread, "snappy", &port::Snappy_Compress,
-               &port::Snappy_Uncompress);
-  }
+    RandomGenerator gen;
+    Slice input = gen.Generate(Options().block_size);
+    std::string compressed;
+    bool ok = port::Snappy_Compress(input.data(), input.size(), &compressed);
+    int64_t bytes = 0;
+    char* uncompressed = new char[input.size()];
+    while (ok && bytes < 1024 * 1048576) {  // Compress 1G
+      ok = port::Snappy_Uncompress(compressed.data(), compressed.size(),
+                                   uncompressed);
+      bytes += input.size();
+      thread->stats.FinishedSingleOp();
+    }
+    delete[] uncompressed;
 
-  void ZstdCompress(ThreadState* thread) {
-    Compress(thread, "zstd",
-             [](const char* input, size_t length, std::string* output) {
-               return port::Zstd_Compress(FLAGS_zstd_compression_level, input,
-                                          length, output);
-             });
-  }
-
-  void ZstdUncompress(ThreadState* thread) {
-    Uncompress(
-        thread, "zstd",
-        [](const char* input, size_t length, std::string* output) {
-          return port::Zstd_Compress(FLAGS_zstd_compression_level, input,
-                                     length, output);
-        },
-        &port::Zstd_Uncompress);
+    if (!ok) {
+      thread->stats.AddMessage("(snappy failure)");
+    } else {
+      thread->stats.AddBytes(bytes);
+    }
   }
 
   void Open() {
@@ -808,14 +707,14 @@ class Benchmark {
     options.write_buffer_size = FLAGS_write_buffer_size;
     options.max_file_size = FLAGS_max_file_size;
     options.block_size = FLAGS_block_size;
-    if (FLAGS_comparisons) {
-      options.comparator = &count_comparator_;
-    }
     options.max_open_files = FLAGS_open_files;
     options.filter_policy = filter_policy_;
     options.reuse_logs = FLAGS_reuse_logs;
-    options.compression =
-        FLAGS_compression ? kSnappyCompression : kNoCompression;
+	options.bits_per_key = FLAGS_bits_per_key;
+	options.keys_per_datatable = FLAGS_keys_per_datatable;
+	options.dram_node = FLAGS_dram_node;
+	options.nvm_node = FLAGS_nvm_node;
+	options.nvm_next_node = FLAGS_nvm_next_node;
     Status s = DB::Open(options, FLAGS_db, &db_);
     if (!s.ok()) {
       std::fprintf(stderr, "open error: %s\n", s.ToString().c_str());
@@ -846,14 +745,14 @@ class Benchmark {
     WriteBatch batch;
     Status s;
     int64_t bytes = 0;
-    KeyBuffer key;
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
       for (int j = 0; j < entries_per_batch_; j++) {
-        const int k = seq ? i + j : thread->rand.Uniform(FLAGS_num);
-        key.Set(k);
-        batch.Put(key.slice(), gen.Generate(value_size_));
-        bytes += value_size_ + key.slice().size();
+        const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
+        char key[100];
+        std::snprintf(key, sizeof(key), "%016d", k);
+        batch.Put(key, gen.Generate(value_size_));
+        bytes += value_size_ + strlen(key);
         thread->stats.FinishedSingleOp();
       }
       s = db_->Write(write_options_, &batch);
@@ -895,29 +794,31 @@ class Benchmark {
     ReadOptions options;
     std::string value;
     int found = 0;
-    KeyBuffer key;
+	int64_t bytes = 0;
     for (int i = 0; i < reads_; i++) {
-      const int k = thread->rand.Uniform(FLAGS_num);
-      key.Set(k);
-      if (db_->Get(options, key.slice(), &value).ok()) {
+      char key[100];
+      const int k = thread->rand.Next() % FLAGS_num;
+      std::snprintf(key, sizeof(key), "%016d", k);
+      if (db_->Get(options, key, &value).ok()) {
+		bytes += strlen(key) + value.size();
         found++;
       }
       thread->stats.FinishedSingleOp();
     }
     char msg[100];
     std::snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
+	thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
 
   void ReadMissing(ThreadState* thread) {
     ReadOptions options;
     std::string value;
-    KeyBuffer key;
     for (int i = 0; i < reads_; i++) {
-      const int k = thread->rand.Uniform(FLAGS_num);
-      key.Set(k);
-      Slice s = Slice(key.slice().data(), key.slice().size() - 1);
-      db_->Get(options, s, &value);
+      char key[100];
+      const int k = thread->rand.Next() % FLAGS_num;
+      std::snprintf(key, sizeof(key), "%016d.", k);
+      db_->Get(options, key, &value);
       thread->stats.FinishedSingleOp();
     }
   }
@@ -926,11 +827,11 @@ class Benchmark {
     ReadOptions options;
     std::string value;
     const int range = (FLAGS_num + 99) / 100;
-    KeyBuffer key;
     for (int i = 0; i < reads_; i++) {
-      const int k = thread->rand.Uniform(range);
-      key.Set(k);
-      db_->Get(options, key.slice(), &value);
+      char key[100];
+      const int k = thread->rand.Next() % range;
+      std::snprintf(key, sizeof(key), "%016d", k);
+      db_->Get(options, key, &value);
       thread->stats.FinishedSingleOp();
     }
   }
@@ -938,35 +839,16 @@ class Benchmark {
   void SeekRandom(ThreadState* thread) {
     ReadOptions options;
     int found = 0;
-    KeyBuffer key;
     for (int i = 0; i < reads_; i++) {
       Iterator* iter = db_->NewIterator(options);
-      const int k = thread->rand.Uniform(FLAGS_num);
-      key.Set(k);
-      iter->Seek(key.slice());
-      if (iter->Valid() && iter->key() == key.slice()) found++;
+      char key[100];
+      const int k = thread->rand.Next() % FLAGS_num;
+      std::snprintf(key, sizeof(key), "%016d", k);
+      iter->Seek(key);
+      if (iter->Valid() && iter->key() == key) found++;
       delete iter;
       thread->stats.FinishedSingleOp();
     }
-    char msg[100];
-    snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
-    thread->stats.AddMessage(msg);
-  }
-
-  void SeekOrdered(ThreadState* thread) {
-    ReadOptions options;
-    Iterator* iter = db_->NewIterator(options);
-    int found = 0;
-    int k = 0;
-    KeyBuffer key;
-    for (int i = 0; i < reads_; i++) {
-      k = (k + (thread->rand.Uniform(100))) % FLAGS_num;
-      key.Set(k);
-      iter->Seek(key.slice());
-      if (iter->Valid() && iter->key() == key.slice()) found++;
-      thread->stats.FinishedSingleOp();
-    }
-    delete iter;
     char msg[100];
     std::snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
     thread->stats.AddMessage(msg);
@@ -976,13 +858,13 @@ class Benchmark {
     RandomGenerator gen;
     WriteBatch batch;
     Status s;
-    KeyBuffer key;
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
       for (int j = 0; j < entries_per_batch_; j++) {
-        const int k = seq ? i + j : (thread->rand.Uniform(FLAGS_num));
-        key.Set(k);
-        batch.Delete(key.slice());
+        const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
+        char key[100];
+        std::snprintf(key, sizeof(key), "%016d", k);
+        batch.Delete(key);
         thread->stats.FinishedSingleOp();
       }
       s = db_->Write(write_options_, &batch);
@@ -1003,7 +885,6 @@ class Benchmark {
     } else {
       // Special thread that keeps writing until other threads are done.
       RandomGenerator gen;
-      KeyBuffer key;
       while (true) {
         {
           MutexLock l(&thread->shared->mu);
@@ -1013,10 +894,10 @@ class Benchmark {
           }
         }
 
-        const int k = thread->rand.Uniform(FLAGS_num);
-        key.Set(k);
-        Status s =
-            db_->Put(write_options_, key.slice(), gen.Generate(value_size_));
+        const int k = thread->rand.Next() % FLAGS_num;
+        char key[100];
+        std::snprintf(key, sizeof(key), "%016d", k);
+        Status s = db_->Put(write_options_, key, gen.Generate(value_size_));
         if (!s.ok()) {
           std::fprintf(stderr, "put error: %s\n", s.ToString().c_str());
           std::exit(1);
@@ -1059,6 +940,7 @@ class Benchmark {
       g_env->RemoveFile(fname);
     }
   }
+
 };
 
 }  // namespace leveldb
@@ -1068,6 +950,11 @@ int main(int argc, char** argv) {
   FLAGS_max_file_size = leveldb::Options().max_file_size;
   FLAGS_block_size = leveldb::Options().block_size;
   FLAGS_open_files = leveldb::Options().max_open_files;
+  FLAGS_keys_per_datatable = leveldb::Options().keys_per_datatable;
+  FLAGS_dram_node = leveldb::Options().dram_node;
+  FLAGS_nvm_node = leveldb::Options().nvm_node;
+  FLAGS_nvm_next_node = leveldb::Options().nvm_next_node;
+  FLAGS_bits_per_key = leveldb::Options().bits_per_key;
   std::string default_db_path;
 
   for (int i = 1; i < argc; i++) {
@@ -1081,18 +968,12 @@ int main(int argc, char** argv) {
     } else if (sscanf(argv[i], "--histogram=%d%c", &n, &junk) == 1 &&
                (n == 0 || n == 1)) {
       FLAGS_histogram = n;
-    } else if (sscanf(argv[i], "--comparisons=%d%c", &n, &junk) == 1 &&
-               (n == 0 || n == 1)) {
-      FLAGS_comparisons = n;
     } else if (sscanf(argv[i], "--use_existing_db=%d%c", &n, &junk) == 1 &&
                (n == 0 || n == 1)) {
       FLAGS_use_existing_db = n;
     } else if (sscanf(argv[i], "--reuse_logs=%d%c", &n, &junk) == 1 &&
                (n == 0 || n == 1)) {
       FLAGS_reuse_logs = n;
-    } else if (sscanf(argv[i], "--compression=%d%c", &n, &junk) == 1 &&
-               (n == 0 || n == 1)) {
-      FLAGS_compression = n;
     } else if (sscanf(argv[i], "--num=%d%c", &n, &junk) == 1) {
       FLAGS_num = n;
     } else if (sscanf(argv[i], "--reads=%d%c", &n, &junk) == 1) {
@@ -1107,8 +988,6 @@ int main(int argc, char** argv) {
       FLAGS_max_file_size = n;
     } else if (sscanf(argv[i], "--block_size=%d%c", &n, &junk) == 1) {
       FLAGS_block_size = n;
-    } else if (sscanf(argv[i], "--key_prefix=%d%c", &n, &junk) == 1) {
-      FLAGS_key_prefix = n;
     } else if (sscanf(argv[i], "--cache_size=%d%c", &n, &junk) == 1) {
       FLAGS_cache_size = n;
     } else if (sscanf(argv[i], "--bloom_bits=%d%c", &n, &junk) == 1) {
@@ -1117,6 +996,16 @@ int main(int argc, char** argv) {
       FLAGS_open_files = n;
     } else if (strncmp(argv[i], "--db=", 5) == 0) {
       FLAGS_db = argv[i] + 5;
+	} else if (sscanf(argv[i], "--keys_per_datatable=%d%c", &n, &junk) == 1) {
+	  FLAGS_keys_per_datatable = n;
+	} else if (sscanf(argv[i], "--dram_node=%d%c", &n, &junk) == 1) {
+	  FLAGS_dram_node = n;
+	} else if (sscanf(argv[i], "--nvm_node=%d%c", &n, &junk) == 1) {
+	  FLAGS_nvm_node = n;
+	} else if (sscanf(argv[i], "--nvm_next_node=%d%c", &n, &junk) == 1) {
+	  FLAGS_nvm_next_node = n;
+	} else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
+	  FLAGS_bits_per_key = n;
     } else {
       std::fprintf(stderr, "Invalid flag '%s'\n", argv[i]);
       std::exit(1);
@@ -1129,6 +1018,7 @@ int main(int argc, char** argv) {
   if (FLAGS_db == nullptr) {
     leveldb::g_env->GetTestDirectory(&default_db_path);
     default_db_path += "/dbbench";
+        std::cout << "Default db path: " << default_db_path << "\n";
     FLAGS_db = default_db_path.c_str();
   }
 

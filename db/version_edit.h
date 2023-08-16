@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
+#include "NVM/datatable.h"
 
 namespace leveldb {
 
@@ -24,6 +25,9 @@ struct FileMetaData {
   uint64_t file_size;    // File size in bytes
   InternalKey smallest;  // Smallest internal key served by table
   InternalKey largest;   // Largest internal key served by table
+
+  DataTable* dt;
+  bool mustquery;
 };
 
 class VersionEdit {
@@ -60,6 +64,20 @@ class VersionEdit {
   // Add the specified file at the specified number.
   // REQUIRES: This version has not been saved (see VersionSet::SaveTo)
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
+  // ADD -------------------------------------
+    void AddFile(int level, uint64_t file, uint64_t file_size,
+               const InternalKey& smallest, const InternalKey& largest, DataTable* addtable) {
+    FileMetaData f;
+    f.number = file;
+    f.file_size = file_size;
+    f.smallest = smallest;
+    f.largest = largest;
+    f.dt = addtable;
+    f.mustquery = false;
+    new_files_.push_back(std::make_pair(level, f));
+  }
+// -------------------------------------
+
   void AddFile(int level, uint64_t file, uint64_t file_size,
                const InternalKey& smallest, const InternalKey& largest) {
     FileMetaData f;
@@ -71,10 +89,12 @@ class VersionEdit {
   }
 
   // Delete the specified "file" from the specified "level".
-  void RemoveFile(int level, uint64_t file) {
+  // void RemoveFile(int level, uint64_t file) {
+  //   deleted_files_.insert(std::make_pair(level, file));
+  // }
+ void RemoveFile(int level, DataTable* file) {
     deleted_files_.insert(std::make_pair(level, file));
   }
-
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(const Slice& src);
 
@@ -83,7 +103,8 @@ class VersionEdit {
  private:
   friend class VersionSet;
 
-  typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
+  //typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
+  typedef std::set<std::pair<int, DataTable*>> DeletedFileSet;
 
   std::string comparator_;
   uint64_t log_number_;

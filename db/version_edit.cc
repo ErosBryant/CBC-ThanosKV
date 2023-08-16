@@ -70,7 +70,8 @@ void VersionEdit::EncodeTo(std::string* dst) const {
   for (const auto& deleted_file_kvp : deleted_files_) {
     PutVarint32(dst, kDeletedFile);
     PutVarint32(dst, deleted_file_kvp.first);   // level
-    PutVarint64(dst, deleted_file_kvp.second);  // file number
+    // modify by mio
+    PutVarint64(dst, (uint64_t)deleted_file_kvp.second);  // file number -> DataTable pointer
   }
 
   for (size_t i = 0; i < new_files_.size(); i++) {
@@ -115,7 +116,7 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
   FileMetaData f;
   Slice str;
   InternalKey key;
-
+    uint64_t tmp;
   while (msg == nullptr && GetVarint32(&input, &tag)) {
     switch (tag) {
       case kComparator:
@@ -167,9 +168,17 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         }
         break;
 
+      // case kDeletedFile:
+      //   if (GetLevel(&input, &level) && GetVarint64(&input, &number)) {
+      //     deleted_files_.insert(std::make_pair(level, number));
+      //   } else {
+      //     msg = "deleted file";
+      //   }
+      //   break;
       case kDeletedFile:
-        if (GetLevel(&input, &level) && GetVarint64(&input, &number)) {
-          deleted_files_.insert(std::make_pair(level, number));
+      
+        if (GetLevel(&input, &level) && GetVarint64(&input, &tmp)) {
+          deleted_files_.insert(std::make_pair(level, (DataTable*)tmp));
         } else {
           msg = "deleted file";
         }
@@ -235,8 +244,9 @@ std::string VersionEdit::DebugString() const {
   for (const auto& deleted_files_kvp : deleted_files_) {
     r.append("\n  RemoveFile: ");
     AppendNumberTo(&r, deleted_files_kvp.first);
-    r.append(" ");
-    AppendNumberTo(&r, deleted_files_kvp.second);
+    // modify by mio
+    r.append("addr: ");
+    AppendNumberTo(&r, (uint64_t)deleted_files_kvp.second);
   }
   for (size_t i = 0; i < new_files_.size(); i++) {
     const FileMetaData& f = new_files_[i].second;

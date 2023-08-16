@@ -18,19 +18,32 @@ static Slice GetLengthPrefixedSlice(const char* data) {
   return Slice(p, len);
 }
 
-MemTable::MemTable(const InternalKeyComparator& comparator)
-    : comparator_(comparator), refs_(0), table_(comparator_, &arena_) {}
+MemTable::MemTable(const InternalKeyComparator& comparator, const size_t size)
+    : comparator_(comparator), refs_(0), arena_(size), table_(comparator_, &arena_) {}
 
 MemTable::~MemTable() { assert(refs_ == 0); }
 
 size_t MemTable::ApproximateMemoryUsage() { return arena_.MemoryUsage(); }
 
-int MemTable::KeyComparator::operator()(const char* aptr,
+int KeyComparator::operator()(const char* aptr,
                                         const char* bptr) const {
   // Internal keys are encoded as length-prefixed strings.
   Slice a = GetLengthPrefixedSlice(aptr);
   Slice b = GetLengthPrefixedSlice(bptr);
   return comparator.Compare(a, b);
+}
+int KeyComparator::NewCompare(const char* aptr,
+										 const char* bptr,
+										 const bool hasseq,
+										 const SequenceNumber snum) const {
+	Slice a = GetLengthPrefixedSlice(aptr);
+	Slice b = GetLengthPrefixedSlice(bptr);
+	return comparator.NewCompare(a, b, hasseq, snum);
+}
+bool KeyComparator::NewCompare(const char* aptr, const char* bptr) const {
+  Slice a = GetLengthPrefixedSlice(aptr);
+  Slice b = GetLengthPrefixedSlice(bptr);
+  return comparator.NewCompare(a, b);
 }
 
 // Encode a suitable internal key target for "target" and return it.
@@ -45,7 +58,7 @@ static const char* EncodeKey(std::string* scratch, const Slice& target) {
 
 class MemTableIterator : public Iterator {
  public:
-  explicit MemTableIterator(MemTable::Table* table) : iter_(table) {}
+  explicit MemTableIterator(nvm_Table* table) : iter_(table) {}
 
   MemTableIterator(const MemTableIterator&) = delete;
   MemTableIterator& operator=(const MemTableIterator&) = delete;
@@ -67,7 +80,7 @@ class MemTableIterator : public Iterator {
   Status status() const override { return Status::OK(); }
 
  private:
-  MemTable::Table::Iterator iter_;
+  nvm_Table::Iterator iter_;
   std::string tmp_;  // For passing to EncodeKey
 };
 
@@ -78,7 +91,6 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   // Format of an entry is concatenation of:
   //  key_size     : varint32 of internal_key.size()
   //  key bytes    : char[internal_key.size()]
-  //  tag          : uint64((sequence << 8) | type)
   //  value_size   : varint32 of value.size()
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
@@ -96,12 +108,13 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   p = EncodeVarint32(p, val_size);
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
-  table_.Insert(buf);
+  // modify by mio 2020/5/30
+  table_.Insert(buf, encoded_len);
 }
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();
-  Table::Iterator iter(&table_);
+  nvm_Table::Iterator iter(&table_);
   iter.Seek(memkey.data());
   if (iter.Valid()) {
     // entry format is:

@@ -11,17 +11,27 @@
 #include "db/skiplist.h"
 #include "leveldb/db.h"
 #include "util/arena.h"
+#include "leveldb/options.h"
 
 namespace leveldb {
 
 class InternalKeyComparator;
 class MemTableIterator;
 
+struct KeyComparator {
+    const InternalKeyComparator comparator;
+    explicit KeyComparator(const InternalKeyComparator& c) : comparator(c) {}
+    int operator()(const char* a, const char* b) const;
+    int NewCompare(const char* a, const char* b, bool hasseq, SequenceNumber snum) const;
+    bool NewCompare(const char* a, const char* b) const;
+};
+typedef SkipList<const char*, KeyComparator> nvm_Table;
+
 class MemTable {
  public:
   // MemTables are reference counted.  The initial reference count
   // is zero and the caller must call Ref() at least once.
-  explicit MemTable(const InternalKeyComparator& comparator);
+  explicit MemTable(const InternalKeyComparator& comparator, const size_t size);
 
   MemTable(const MemTable&) = delete;
   MemTable& operator=(const MemTable&) = delete;
@@ -66,20 +76,21 @@ class MemTable {
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;
 
-  struct KeyComparator {
+  /*struct KeyComparator {
     const InternalKeyComparator comparator;
     explicit KeyComparator(const InternalKeyComparator& c) : comparator(c) {}
     int operator()(const char* a, const char* b) const;
   };
 
-  typedef SkipList<const char*, KeyComparator> Table;
+  typedef SkipList<const char*, KeyComparator> mTable;*/
 
   ~MemTable();  // Private since only Unref() should be used to delete it
 
   KeyComparator comparator_;
   int refs_;
+ public:
   Arena arena_;
-  Table table_;
+  nvm_Table table_;
 };
 
 }  // namespace leveldb

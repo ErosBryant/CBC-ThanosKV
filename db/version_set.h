@@ -152,6 +152,7 @@ class Version {
 
   // List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
+  double level_score_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
   FileMetaData* file_to_compact_;
@@ -167,7 +168,7 @@ class Version {
 class VersionSet {
  public:
   VersionSet(const std::string& dbname, const Options* options,
-             TableCache* table_cache, const InternalKeyComparator*);
+             /*TableCache* table_cache,*/ const InternalKeyComparator*);
   VersionSet(const VersionSet&) = delete;
   VersionSet& operator=(const VersionSet&) = delete;
 
@@ -231,7 +232,8 @@ class VersionSet {
   // Returns nullptr if there is no compaction to be done.
   // Otherwise returns a pointer to a heap-allocated object that
   // describes the compaction.  Caller should delete the result.
-  Compaction* PickCompaction();
+
+  Compaction* PickCompaction(int arrivallevel);
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -254,6 +256,12 @@ class VersionSet {
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
   }
 
+  bool NeedsCompaction(int arrivallevel) const {
+    assert(arrivallevel > 0 && arrivallevel < config::kNumLevels);
+    Version* v = current_;
+    return (v->level_score_[arrivallevel - 1] >= 1)/* || (v->file_to_compact_ != nullptr)*/;
+  }
+  
   // Add all files listed in any live version to *live.
   // May also mutate some internal state.
   void AddLiveFiles(std::set<uint64_t>* live);
@@ -296,7 +304,7 @@ class VersionSet {
   Env* const env_;
   const std::string dbname_;
   const Options* const options_;
-  TableCache* const table_cache_;
+  //TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_;

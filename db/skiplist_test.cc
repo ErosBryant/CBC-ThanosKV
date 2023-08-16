@@ -61,6 +61,7 @@ TEST(SkipTest, InsertAndLookup) {
     if (keys.insert(key).second) {
       list.Insert(key);
     }
+    
   }
 
   for (int i = 0; i < R; i++) {
@@ -366,3 +367,8 @@ TEST(SkipTest, Concurrent4) { RunConcurrent(4); }
 TEST(SkipTest, Concurrent5) { RunConcurrent(5); }
 
 }  // namespace leveldb
+
+int main(int argc, char** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

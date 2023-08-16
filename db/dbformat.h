@@ -22,10 +22,10 @@ namespace leveldb {
 // Grouping of constants.  We may want to make some of these
 // parameters set via options.
 namespace config {
-static const int kNumLevels = 7;
+static const int kNumLevels = 4 ;
 
 // Level-0 compaction is started when we hit this many files.
-static const int kL0_CompactionTrigger = 4;
+static const int kL0_CompactionTrigger = 2;
 
 // Soft limit on number of level-0 files.  We slow down writes at this point.
 static const int kL0_SlowdownWritesTrigger = 8;
@@ -107,6 +107,11 @@ class InternalKeyComparator : public Comparator {
   explicit InternalKeyComparator(const Comparator* c) : user_comparator_(c) {}
   const char* Name() const override;
   int Compare(const Slice& a, const Slice& b) const override;
+
+  //추가 된것 : DATA TABLE에서 사용하기 위해
+  int NewCompare(const Slice& akey, const Slice& bkey, bool hasseq, const SequenceNumber snum) const;
+  bool NewCompare(const Slice& akey, const Slice& bkey) const;
+
   void FindShortestSeparator(std::string* start,
                              const Slice& limit) const override;
   void FindShortSuccessor(std::string* key) const override;

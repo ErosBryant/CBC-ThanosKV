@@ -1,0 +1,21 @@
+./db_bench             --use_existing_db=0             --benchmarks=fillrandom,stats             --num=262144             --value_size=4080             --db=/mnt/pmemdir            --write_buffer_size=67108864            
+Keys:       16 bytes each
+Values:     4080 bytes each (2040 bytes after compression)
+Entries:    262144
+RawSize:    1024.0 MB (estimated)
+FileSize:   514.0 MB (estimated)
+------------------------------------------------
+fillrandom   :       5.533 micros/op;  705.9 MB/s
+ 
+ memtable stall time: 0  us
+L0 stall time: 0  us
+L0 slow stall time: 0  us
+
+                               Compactions
+Level  Files Size(MB) Time(sec) Read(MB) Write(MB)
+--------------------------------------------------
+  0        1       64         0        0       964
+  1        1      128         0        0         3
+  2        2      512         0        0         3
+  3        1      256         0        0       257
+

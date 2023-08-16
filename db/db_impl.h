@@ -18,6 +18,7 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+#include "NVM/datatable.h"
 namespace leveldb {
 
 class MemTable;
@@ -28,8 +29,13 @@ class VersionSet;
 
 class DBImpl : public DB {
  public:
-  DBImpl(const Options& options, const std::string& dbname);
 
+    uint64_t mem_stall_time_;
+    uint64_t L0_stop_stall_time_;  
+    uint64_t l0_slow_tall_time_ ;
+
+  //DBImpl(const Options& options, const std::string& dbname_disk, const std::string& dbname_mem);
+  DBImpl(const Options& options, const std::string& dbname_);
   DBImpl(const DBImpl&) = delete;
   DBImpl& operator=(const DBImpl&) = delete;
 
@@ -130,6 +136,10 @@ class DBImpl : public DB {
   Status WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // nvm
+  Status WriteLevel0Table(MemTable* mem, VersionEdit* edit)
+      EXCLUSIVE_LOCKS_REQUIRED(mutex_);    
+
   Status MakeRoomForWrite(bool force /* compact even if there is room? */)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   WriteBatch* BuildBatchGroup(Writer** last_writer)
@@ -141,6 +151,13 @@ class DBImpl : public DB {
   static void BGWork(void* db);
   void BackgroundCall();
   void BackgroundCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  //nvm 용 
+  void MaybeScheduleCompaction(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  static void BGWork(void* db, int level);
+  void BackgroundCall(int level);
+  void BackgroundCompaction(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   void CleanupCompaction(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   Status DoCompactionWork(CompactionState* compact)
@@ -163,9 +180,10 @@ class DBImpl : public DB {
   const bool owns_info_log_;
   const bool owns_cache_;
   const std::string dbname_;
+  const std::string dbname_nvm_;
 
   // table_cache_ provides its own synchronization
-  TableCache* const table_cache_;
+  //TableCache* const table_cache_;
 
   // Lock over the persistent DB state.  Non-null iff successfully acquired.
   FileLock* db_lock_;
@@ -193,7 +211,9 @@ class DBImpl : public DB {
   std::set<uint64_t> pending_outputs_ GUARDED_BY(mutex_);
 
   // Has a background compaction been scheduled or is running?
-  bool background_compaction_scheduled_ GUARDED_BY(mutex_);
+  bool background_compaction_scheduled_[config::kNumLevels] GUARDED_BY(mutex_);
+  
+ // bool background_compaction_scheduled_[config::kNumLevels] GUARDED_BY(mutex_);
 
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
 
@@ -215,3 +235,4 @@ Options SanitizeOptions(const std::string& db,
 }  // namespace leveldb
 
 #endif  // STORAGE_LEVELDB_DB_DB_IMPL_H_
+

@@ -8,6 +8,7 @@
 #include <cstddef>
 
 #include "leveldb/export.h"
+#include "NVM/nvm_option.h"
 
 namespace leveldb {
 
@@ -27,13 +28,32 @@ enum CompressionType {
   // part of the persistent format on disk.
   kNoCompression = 0x0,
   kSnappyCompression = 0x1,
-  kZstdCompression = 0x2,
+  kZstdCompression = 0x2
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
 struct LEVELDB_EXPORT Options {
   // Create an Options object with default values for all fields.
   Options();
+  // -------------------
+  // if true, DataTable will use bloom filter
+  bool use_datatable_bloom = true;
+
+  // bloom filter bits per key. 99%
+  size_t bits_per_key = 16;
+
+  // keys in datatable in the highest level which sets bloom filter
+  int keys_per_datatable = 2097152;
+
+  // dram node in numa, default node0
+  int dram_node = 0;
+
+  // support two nvm numa nodes currently, default node2, node4
+  int nvm_node = 0;
+  int nvm_next_node = -1;
+  // numactl --hardware
+
+  NVMOption nvm_option;
 
   // -------------------
   // Parameters that affect behavior
@@ -80,7 +100,7 @@ struct LEVELDB_EXPORT Options {
   // so you may wish to adjust this parameter to control memory usage.
   // Also, a larger write buffer will result in a longer recovery time
   // the next time the database is opened.
-  size_t write_buffer_size = 4 * 1024 * 1024;
+  size_t write_buffer_size = 64 * 1024 * 1024;
 
   // Number of open files that can be used by the DB.  You may need to
   // increase this if your database has a large working set (budget
@@ -118,8 +138,9 @@ struct LEVELDB_EXPORT Options {
   // Compress blocks using the specified compression algorithm.  This
   // parameter can be changed dynamically.
   //
-  // Default: kSnappyCompression, which gives lightweight but fast
-  // compression.
+  // Compression level for zstd.
+  // Currently only the range [-5,22] is supported. Default is 1.
+  int zstd_compression_level = 1;
   //
   // Typical speeds of kSnappyCompression on an Intel(R) Core(TM)2 2.4GHz:
   //    ~200-500MB/s compression
@@ -130,10 +151,6 @@ struct LEVELDB_EXPORT Options {
   // incompressible, the kSnappyCompression implementation will
   // efficiently detect that and will switch to uncompressed mode.
   CompressionType compression = kSnappyCompression;
-
-  // Compression level for zstd.
-  // Currently only the range [-5,22] is supported. Default is 1.
-  int zstd_compression_level = 1;
 
   // EXPERIMENTAL: If true, append to existing MANIFEST and log files
   // when a database is opened.  This can significantly speed up open.
@@ -149,6 +166,8 @@ struct LEVELDB_EXPORT Options {
 
 // Options that control read operations
 struct LEVELDB_EXPORT ReadOptions {
+  ReadOptions() = default;
+
   // If true, all data read from underlying storage will be
   // verified against corresponding checksums.
   bool verify_checksums = false;

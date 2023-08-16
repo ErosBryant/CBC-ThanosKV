@@ -133,4 +133,55 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   end_ = dst;
 }
 
+// 추가 된것 : DATA TABLE에서 사용하기 위해
+// NewCompare is used to compare two keys in data table
+// akey = bkey && anum < bnum, return true
+
+int InternalKeyComparator::NewCompare(const Slice& akey, const Slice& bkey, bool hasseq, const SequenceNumber snum) const {
+  int r = user_comparator_->Compare(ExtractUserKey(akey), ExtractUserKey(bkey));
+  if (r < 0) {
+    r = 0b01;
+  } else if (r == 0) {
+    r = 0b10;
+  } else {
+    r = 0b11;
+  }
+
+  if (hasseq) {
+    const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
+    const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+
+    if (anum <= snum) {
+      //code is 0
+    } else {
+      r += 0b100;
+    }
+
+    if (bnum <= snum) {
+      //code is 0
+    }   else {
+      r += 0b1000;
+    }
+  }
+  return r;
+}
+
+// akey = bkey && anum < bnum, return true
+bool InternalKeyComparator::NewCompare(const Slice& akey, const Slice& bkey) const {
+  int r = user_comparator_->Compare(ExtractUserKey(akey), ExtractUserKey(bkey));
+  if (r == 0) {
+    const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
+    const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+    if (anum < bnum) {
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return false;
+  }
+}
+
+
+
 }  // namespace leveldb
