@@ -20,11 +20,13 @@ struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
 
   int refs;
-  int allowed_seeks;  // Seeks allowed until compaction
   uint64_t number;
-  uint64_t file_size;    // File size in bytes
-  InternalKey smallest;  // Smallest internal key served by table
-  InternalKey largest;   // Largest internal key served by table
+  uint32_t allowed_seeks;          // Seeks allowed until compaction
+  uint64_t file_size;         // File size in bytes
+  uint64_t total;             // Total count of keys
+  uint64_t alive;             // Count of live keys
+  InternalKey smallest;       // Smallest internal key served by table
+  InternalKey largest;        // Largest internal key served by table
 
   DataTable* dt;
   bool mustquery;
@@ -76,6 +78,26 @@ class VersionEdit {
     f.mustquery = false;
     new_files_.push_back(std::make_pair(level, f));
   }
+
+
+  
+  void AddFile(uint64_t file,
+               uint64_t file_size,
+               uint64_t total,
+               uint64_t alive,
+               const InternalKey& smallest,
+               const InternalKey& largest) {
+    FileMetaData f;
+    f.number = file;
+    f.file_size = file_size;
+    f.total = total;
+    f.alive = alive;
+    f.smallest = smallest;
+    f.largest = largest;
+    _new_files_.push_back(f);
+  }
+
+
 // -------------------------------------
 
   void AddFile(int level, uint64_t file, uint64_t file_size,
@@ -120,6 +142,7 @@ class VersionEdit {
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
+   std::vector<FileMetaData> _new_files_;
 };
 
 }  // namespace leveldb

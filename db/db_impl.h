@@ -107,6 +107,33 @@ class DBImpl : public DB {
     int64_t bytes_written;
   };
 
+
+    // ssd에 쓰기 
+
+  struct CompactionStattossd {
+    int64_t count;
+    int64_t files_deleted;
+    int64_t files_created;
+    int64_t micros;
+    int64_t bytes_read;
+    int64_t bytes_written;
+    int64_t total_stalls;
+
+    CompactionStattossd() : count(0), files_deleted(0), files_created(0), micros(0), bytes_read(0), bytes_written(0), total_stalls(0) { }
+
+    void Add(const CompactionStattossd& c) {
+      this->count++;
+      this->files_deleted += c.files_deleted;
+      this->files_created += c.files_created;
+      this->micros += c.micros;
+      this->bytes_read += c.bytes_read;
+      this->bytes_written += c.bytes_written;
+    }
+  };
+
+
+
+
   Iterator* NewInternalIterator(const ReadOptions&,
                                 SequenceNumber* latest_snapshot,
                                 uint32_t* seed);
@@ -133,10 +160,11 @@ class DBImpl : public DB {
                         VersionEdit* edit, SequenceNumber* max_sequence)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  Status WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
+  // nvm
+
+  Status WriteLeveltoSsTable(DataTable* mem, VersionEdit* edit)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  // nvm
   Status WriteLevel0Table(MemTable* mem, VersionEdit* edit)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);    
 
@@ -158,10 +186,14 @@ class DBImpl : public DB {
   void BackgroundCall(int level);
   void BackgroundCompaction(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+
   void CleanupCompaction(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   Status DoCompactionWork(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  Status CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot)
+      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
 
   Status OpenCompactionOutputFile(CompactionState* compact);
   Status FinishCompactionOutputFile(CompactionState* compact, Iterator* input);
@@ -183,7 +215,7 @@ class DBImpl : public DB {
   const std::string dbname_nvm_;
 
   // table_cache_ provides its own synchronization
-  //TableCache* const table_cache_;
+  TableCache* const table_cache_;
 
   // Lock over the persistent DB state.  Non-null iff successfully acquired.
   FileLock* db_lock_;
@@ -216,13 +248,16 @@ class DBImpl : public DB {
  // bool background_compaction_scheduled_[config::kNumLevels] GUARDED_BY(mutex_);
 
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
-
+  
   VersionSet* const versions_ GUARDED_BY(mutex_);
-
   // Have we encountered a background error in paranoid mode?
   Status bg_error_ GUARDED_BY(mutex_);
-
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
+
+
+  // for read sstable 
+ // VersionSet* const versions_sst GUARDED_BY(mutex_);
+  CompactionStattossd _stats_ GUARDED_BY(mutex_);
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

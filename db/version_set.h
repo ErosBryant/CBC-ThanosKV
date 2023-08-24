@@ -168,7 +168,7 @@ class Version {
 class VersionSet {
  public:
   VersionSet(const std::string& dbname, const Options* options,
-             /*TableCache* table_cache,*/ const InternalKeyComparator*);
+             TableCache* table_cache, const InternalKeyComparator*);
   VersionSet(const VersionSet&) = delete;
   VersionSet& operator=(const VersionSet&) = delete;
 
@@ -259,7 +259,7 @@ class VersionSet {
   bool NeedsCompaction(int arrivallevel) const {
     assert(arrivallevel > 0 && arrivallevel < config::kNumLevels);
     Version* v = current_;
-    return (v->level_score_[arrivallevel - 1] >= 1)/* || (v->file_to_compact_ != nullptr)*/;
+    return (v->level_score_[arrivallevel - 1] >= 1) || (v->file_to_compact_ != nullptr);
   }
   
   // Add all files listed in any live version to *live.
@@ -304,7 +304,7 @@ class VersionSet {
   Env* const env_;
   const std::string dbname_;
   const Options* const options_;
-  //TableCache* const table_cache_;
+  TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_;

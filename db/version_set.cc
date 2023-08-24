@@ -753,7 +753,7 @@ class VersionSet::Builder {
       std::vector<FileMetaData*>::iterator base_end = base_files.end();
       const FileSet* added_files = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added_files->size());
-      // add by mio
+
       /*for(; base_iter != base_end; ++base_iter) {
         MaybeAddFile(v, level, *base_iter);
       }
@@ -821,20 +821,13 @@ class VersionSet::Builder {
     }
   }
 
-  // modify by mio
   void MaybeAddFile(Version* v, int level, FileMetaData* f, bool IsBase) {
     if (IsBase && levels_[level].deleted_files.count(f->dt) > 0) {
       // File is deleted: do nothing
       //return false;
-      //std::cout << "do not save: " << f->dt << std::endl;
     } else {
       std::vector<FileMetaData*>* files = &v->files_[level];
-      /* delete by mio, in miodb, overlap always exists
-      if (level > 0 && !files->empty()) {
-        // Must not overlap
-        assert(vset_->icmp_.Compare((*files)[files->size() - 1]->largest,
-                                    f->smallest) < 0);
-      }*/
+
       f->refs++;
       f->dt->Ref();
       files->push_back(f);
@@ -844,14 +837,12 @@ class VersionSet::Builder {
 };
 
 VersionSet::VersionSet(const std::string& dbname, const Options* options,
-                       // delete by mio
-                       /*TableCache* table_cache,*/
+                       TableCache* table_cache,
                        const InternalKeyComparator* cmp)
     : env_(options->env),
       dbname_(dbname),
       options_(options),
-      /*delete by mio 2020/6/30
-      table_cache_(table_cache),*/
+      table_cache_(table_cache),
       icmp_(*cmp),
       next_file_number_(2),
       manifest_file_number_(0),  // Filled by Recover()
@@ -1150,28 +1141,7 @@ void VersionSet::Finalize(Version* v) {
 
   for (int level = 0; level < config::kNumLevels - 1; level++) {
     double score;
-    /* delete by mio
-    if (level == 0) {
-      // We treat level-0 specially by bounding the number of files
-      // instead of number of bytes for two reasons:
-      //
-      // (1) With larger write-buffer sizes, it is nice not to do too
-      // many level-0 compactions.
-      //
-      // (2) The files in level-0 are merged on every read and
-      // therefore we wish to avoid too many files when the individual
-      // file size is small (perhaps because of a small write-buffer
-      // setting, or very high compression ratios, or lots of
-      // overwrites/deletions).
-      score = v->files_[level].size() /
-              static_cast<double>(config::kL0_CompactionTrigger);
-    } else {
-      // Compute the ratio of current size to size limit.
-      const uint64_t level_bytes = TotalFileSize(v->files_[level]);
-      score =
-          static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
-    }*/
-    // add by mio
+
     score = v->files_[level].size() /
             static_cast<double>(config::kL0_CompactionTrigger);
     v->level_score_[level] = score;
@@ -1379,9 +1349,8 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
   Compaction* c;
 
   int level = arrivallevel - 1;
-
-  // We prefer compactions triggered by too much data in a level over
-  // the compactions triggered by seeks.
+  // int level = arrivallevel;
+  
   const bool size_compaction = (current_->level_score_[level] >= 1);
   if (size_compaction) {
     c = new Compaction(options_, level);
