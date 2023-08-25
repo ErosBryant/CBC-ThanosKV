@@ -108,7 +108,6 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   p = EncodeVarint32(p, val_size);
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
-  // modify by mio 2020/5/30
   table_.Insert(buf, encoded_len);
 }
 

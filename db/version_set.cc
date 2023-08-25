@@ -18,7 +18,7 @@
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
 #include "util/logging.h"
-// add by mio
+
 #include "NVM/datatable.h"
 
 namespace leveldb {
@@ -87,7 +87,7 @@ Version::~Version() {
   }
 }
 
-// delete by mio 2020/6/22
+
 /*
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files, const Slice& key) {
@@ -143,7 +143,7 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
   }
   return false;
   
-  /* delete by mio 2020/6/25
+  /* 
   if (!disjoint_sorted_files) {
     // Need to check against all files
     for (size_t i = 0; i < files.size(); i++) {
@@ -188,7 +188,7 @@ class Version::LevelFileNumIterator : public Iterator {
   }
   bool Valid() const override { return index_ < flist_->size(); }
   void Seek(const Slice& target) override {
-    // modify by mio 2020/6/26
+
     //index_ = FindFile(icmp_, *flist_, target);
   }
   void SeekToFirst() override { index_ = 0; }
@@ -250,7 +250,7 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
 
 void Version::AddIterators(const ReadOptions& options,
                            std::vector<Iterator*>* iters) {
-  /* delete by mio 2020/7/15
+
   // Merge all level zero files together since they may overlap
   for (size_t i = 0; i < files_[0].size(); i++) {
     iters->push_back(vset_->table_cache_->NewIterator(
@@ -314,7 +314,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   const Comparator* ucmp = vset_->icmp_.user_comparator();
 
   // Search level-0 in order from newest to oldest.
-  // modify by mio 2020/6/23
+
   // add a loop for all level
   for (int level = 0; level < config::kNumLevels; level++) {
     std::vector<FileMetaData*> tmp;
@@ -344,7 +344,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
       tmp.clear();
     }
   }
-  /* delete by mio 2020/6/23
+  /*
   // Search other levels.
   for (int level = 1; level < config::kNumLevels; level++) {
     size_t num_files = files_[level].size();
@@ -396,7 +396,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       state->last_file_read = f;
       state->last_file_read_level = level;
 
-      /* delete by mio 2020/6/23
+      /* 
       state->s = state->vset->table_cache_->Get(*state->options, f->number,
                                                 f->file_size, state->ikey,
                                                 &state->saver, SaveValue);*/
@@ -643,10 +643,8 @@ class VersionSet::Builder {
 
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
   struct LevelState {
-    //modify by mio
-    //std::set<uint64_t> deleted_files;
-    std::set<DataTable*> deleted_files;
     FileSet* added_files;
+    std::set<DataTable*> deleted_files;
   };
 
   VersionSet* vset_;
@@ -687,21 +685,10 @@ class VersionSet::Builder {
 
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
-    // Update compaction pointers
-    // delete by mio 2020/7/23
-    /*
-    for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
-      const int level = edit->compact_pointers_[i].first;
-      vset_->compact_pointer_[level] =
-          edit->compact_pointers_[i].second.Encode().ToString();
-    }*/
 
     // Delete files
     for (const auto& deleted_file_set_kvp : edit->deleted_files_) {
       const int level = deleted_file_set_kvp.first;
-      /* modify by mio
-      const uint64_t number = deleted_file_set_kvp.second;
-      levels_[level].deleted_files.insert(number);*/
       levels_[level].deleted_files.insert(deleted_file_set_kvp.second);
     }
 

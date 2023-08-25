@@ -115,6 +115,7 @@ char* Arena::AllocateNewBlock(size_t block_bytes) {
   return result;
 }
 
+
 void Arena::ReceiveArena(Arena* a) {
   int j = 0;
   for (int i = 0; i < a->blocks_.size(); i++) {

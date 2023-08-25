@@ -70,7 +70,6 @@ void VersionEdit::EncodeTo(std::string* dst) const {
   for (const auto& deleted_file_kvp : deleted_files_) {
     PutVarint32(dst, kDeletedFile);
     PutVarint32(dst, deleted_file_kvp.first);   // level
-    // modify by mio
     PutVarint64(dst, (uint64_t)deleted_file_kvp.second);  // file number -> DataTable pointer
   }
 

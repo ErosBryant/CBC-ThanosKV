@@ -259,7 +259,7 @@ class VersionSet {
   bool NeedsCompaction(int arrivallevel) const {
     assert(arrivallevel > 0 && arrivallevel < config::kNumLevels);
     Version* v = current_;
-    return (v->level_score_[arrivallevel - 1] >= 1) || (v->file_to_compact_ != nullptr);
+    return (v->level_score_[arrivallevel - 1] >= 1)/* || (v->file_to_compact_ != nullptr)*/;
   }
   
   // Add all files listed in any live version to *live.

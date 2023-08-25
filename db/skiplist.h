@@ -211,13 +211,11 @@ class SkipList {
 // Implementation details follow
 template <typename Key, class Comparator>
 struct SkipList<Key, Comparator>::Node {
-  // add parameter len by mio 2020/5/30
   explicit Node(const Key& k, const size_t& l, const int h) : key(k), len(l), height(h) {}
 
-  // modify by mio 2020/5/29
   // Key const -> key;
   Key key;
-  // add by mio 2020/5/29
+
   size_t len;
   int height;
 
@@ -251,7 +249,7 @@ struct SkipList<Key, Comparator>::Node {
   std::atomic<Node*> next_[1];
 };
 
-// modify by mio 2020/5/20
+
 template <typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::NewNode(
     const Key& key, int height, const size_t& len) {
@@ -422,7 +420,7 @@ SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
   insertingnode.store(nullptr, std::memory_order_relaxed);
 }
 
-// add parameter len by mio 2020/5/30
+
 template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::Insert(const Key& key, const size_t& len) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
@@ -631,7 +629,7 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
     insertingnode.store(x, std::memory_order_release);
     DeleteNode(xpre, x);
     Insert(x, ypre);
-	wa += (3 * 8 * x->height);
+	  wa += (3 * 8 * x->height);
     y = x;
     PreNext(ypre, y->height);
 

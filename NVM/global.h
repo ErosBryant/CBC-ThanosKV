@@ -11,4 +11,5 @@ extern size_t nvm_free_space;
 extern bool nvm_node_has_changed;
 void NvmNodeSizeInit(const Options& options_);
 void NvmNodeSizeRecord(size_t s);
+void NvmUsagePrint();
 #endif
