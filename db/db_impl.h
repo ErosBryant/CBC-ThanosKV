@@ -191,7 +191,7 @@ class DBImpl : public DB {
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   Status DoCompactionWork(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-  Status CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot)
+  Status CompactionToSsd(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
 
@@ -215,7 +215,7 @@ class DBImpl : public DB {
   const bool owns_info_log_;
   const bool owns_cache_;
   const std::string dbname_;
-  const std::string dbname_nvm_;
+  const std::string dbname_ssd_;
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;
@@ -252,14 +252,16 @@ class DBImpl : public DB {
 
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
   
-  VersionSet* const versions_ GUARDED_BY(mutex_);
+ 
   // Have we encountered a background error in paranoid mode?
   Status bg_error_ GUARDED_BY(mutex_);
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
 
-  // for read sstable 
- // VersionSet* const versions_sst GUARDED_BY(mutex_);
+  //n for read pmtable
+  VersionSet* const versions_ GUARDED_BY(mutex_);
+  // for read sstable
+  VersionSet* const versions_sst GUARDED_BY(mutex_);
   CompactionStattossd _stats_ GUARDED_BY(mutex_);
 };
 

@@ -3,28 +3,29 @@
 // just used to test more KVs
 // in beta version, we support 2 nvm numa nodes
 int nvm_node = 0;
-int nvm_next_node = 4;
+int nvm_next_node = 0;
 size_t nvm_free_space = 32L * 1024 * 1024 * 1024;
 bool nvm_node_has_changed = false;
-size_t nvm_actual_use = 0L;
-size_t nvm_use_max = 0L;
+size_t nvm_use = 0L;
 long long nvm_total = 0L;
 long long ops_num = 0L;
-// init nvm_free_space
+
+
 void NvmNodeSizeInit(const Options& options_) {
     nvm_node = options_.nvm_node;
     nvm_next_node = options_.nvm_next_node;
     long tmp;
     numa_node_size(nvm_node, &tmp);
     nvm_free_space = (size_t)tmp - 16L * 1024 * 1024 * 1024;   // when nvm is full, it will impact performance, so we have 16GB left
-	//std::cout << "init nvm node size: " << nvm_free_space << std::endl;
+	
+}
+
+void nvmn_size_delete(size_t s) {
+    nvm_use-=s;
 }
 
 void NvmNodeSizeRecord(size_t s) {
-    nvm_actual_use += s;
-    if (nvm_use_max < nvm_actual_use) {
-        nvm_use_max = nvm_actual_use;
-    }
+    nvm_use += s;
     if (nvm_node_has_changed || nvm_next_node == -1) {
         return;
     }
@@ -39,7 +40,5 @@ void NvmNodeSizeRecord(size_t s) {
 
 
 void NvmUsagePrint() {
-    std::cout << "Final Use NVM: " << 1.0 * nvm_actual_use / 1024 / 1024 / 1024 << " GB" << std::endl;
-    std::cout << "Max Use NVM: " << 1.0 * nvm_use_max / 1024 / 1024 / 1024 << " GB" << std::endl;
- 
+    std::cout << "Final Use NVM: " << 1.0 * nvm_use / 1024 / 1024 / 1024 << " GB" << std::endl;
 }

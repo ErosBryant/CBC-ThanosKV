@@ -1,4 +1,3 @@
-// Add by MioDB
 // Mergeable bloom filters can accelerate datatables' query requests
 
 #include <string>

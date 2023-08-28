@@ -130,7 +130,7 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* largest_user_key) {
   const Comparator* ucmp = icmp.user_comparator();
 
-  // add by mio
+
   // Need to check against all files
   for (size_t i = 0; i < files.size(); i++) {
     const FileMetaData* f = files[i];
@@ -240,7 +240,7 @@ static Iterator* GetFileIterator(void* arg, const ReadOptions& options,
   }
 }
 
-/* delete by mio
+/* 
 Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
                                             int level) const {
   return NewTwoLevelIterator(
@@ -250,7 +250,7 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
 
 void Version::AddIterators(const ReadOptions& options,
                            std::vector<Iterator*>* iters) {
-
+/*
   // Merge all level zero files together since they may overlap
   for (size_t i = 0; i < files_[0].size(); i++) {
     iters->push_back(vset_->table_cache_->NewIterator(
@@ -264,8 +264,8 @@ void Version::AddIterators(const ReadOptions& options,
     if (!files_[level].empty()) {
       iters->push_back(NewConcatenatingIterator(options, level));
     }
-  }*/
-  // add by mio
+  }
+*/
   for (int level = 0; level < config::kNumLevels; level++) {
     if (!files_[level].empty()) {
       for (size_t i = 0; i < files_[level].size(); i++) {
@@ -340,7 +340,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
           return;
         }
       }
-      // add by mio
+
       tmp.clear();
     }
   }
@@ -400,7 +400,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       state->s = state->vset->table_cache_->Get(*state->options, f->number,
                                                 f->file_size, state->ikey,
                                                 &state->saver, SaveValue);*/
-      // add by mio
+ 
       if (f->dt->Get(*(state->lkey), state->saver.value, state->s)) {
         state->found = true;
         return false;
@@ -441,7 +441,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
 
   state.options = &options;
   state.ikey = k.internal_key();
-  // add by mio
+
   state.lkey = &k;
   state.vset = vset_;
 
@@ -575,7 +575,7 @@ void Version::GetOverlappingInputs(int level, const InternalKey* begin,
       // "f" is completely after specified range; skip it
     } else {
       inputs->push_back(f);
-      // modify by mio
+  
       //if (level == 0) {
       if (true) {
         // Level-0 files may overlap each other.  So check if the newly
@@ -712,12 +712,12 @@ class VersionSet::Builder {
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
 
-      /* modify by mio
+      /* 
       f->allowed_seeks = static_cast<int>((f->file_size / 16384U));
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;*/
       f->allowed_seeks = 30000;
 
-      // modify by mio
+
       //levels_[level].deleted_files.erase(f->number);
       //levels_[level].deleted_files.erase(f->dt);
       levels_[level].added_files->insert(f);
@@ -773,7 +773,7 @@ class VersionSet::Builder {
           }
         }*/
       }
-      /* delete by mio
+      /* 
       for (const auto& added_file : *added_files) {
         // Add all smaller files listed in base_
         for (std::vector<FileMetaData*>::const_iterator bpos =
@@ -823,6 +823,7 @@ class VersionSet::Builder {
   }
 };
 
+
 VersionSet::VersionSet(const std::string& dbname, const Options* options,
                        TableCache* table_cache,
                        const InternalKeyComparator* cmp)
@@ -842,6 +843,8 @@ VersionSet::VersionSet(const std::string& dbname, const Options* options,
       current_(nullptr) {
   AppendVersion(new Version(this));
 }
+
+
 
 VersionSet::~VersionSet() {
   current_->Unref();
@@ -1163,7 +1166,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
     const std::vector<FileMetaData*>& files = current_->files_[level];
     for (size_t i = 0; i < files.size(); i++) {
       const FileMetaData* f = files[i];
-      // modify by mio
+
       edit.AddFile(level, f->number, f->file_size, f->smallest, f->largest, f->dt);
     }
   }
@@ -1181,7 +1184,7 @@ int VersionSet::NumLevelFiles(int level) const {
 
 const char* VersionSet::LevelSummary(LevelSummaryStorage* scratch) const {
   // Update code if kNumLevels changes
-  // delete by mio
+
   //static_assert(config::kNumLevels == 7, "");
   std::snprintf(
       scratch->buffer, sizeof(scratch->buffer), "files[ %d %d %d %d %d %d %d ]",
@@ -1211,7 +1214,7 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
       } else {
         // "ikey" falls in the range for this table.  Add the
         // approximate offset of "ikey" within the table.
-        /* delete by mio
+        /*
         Table* tableptr;
         Iterator* iter = table_cache_->NewIterator(
             ReadOptions(), files[i]->number, files[i]->file_size, &tableptr);
@@ -1225,7 +1228,7 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   return result;
 }
 
-// maybe needs modification by mio
+
 void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {
   for (Version* v = dummy_versions_.next_; v != &dummy_versions_;
        v = v->next_) {
@@ -1296,7 +1299,7 @@ void VersionSet::GetRange2(const std::vector<FileMetaData*>& inputs1,
   GetRange(all, smallest, largest);
 }
 
-/* delete by mio
+/* 
 Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   ReadOptions options;
   options.verify_checksums = options_->paranoid_checks;
@@ -1565,7 +1568,7 @@ bool Compaction::IsTrivialMove() const {
               MaxGrandParentOverlapBytes(vset->options_));
 }
 
-// modify by mio
+
 void Compaction::AddInputDeletions(VersionEdit* edit) {
   for (int which = 0; which < 2; which++) {
     for (size_t i = 0; i < inputs_[which].size(); i++) {

@@ -45,7 +45,6 @@ class DataTable {
 
   // Returns an estimate of the number of bytes of data in use by this
   // data structure. 
-  //Is it safe to call when DataTable is being modified???????????????
   //Can be replaced by a number, when compation is completed, we can recalculate it
   //used to judge if the db should compact
   size_t ApproximateMemoryUsage();

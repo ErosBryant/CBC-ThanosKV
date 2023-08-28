@@ -243,7 +243,7 @@ std::string VersionEdit::DebugString() const {
   for (const auto& deleted_files_kvp : deleted_files_) {
     r.append("\n  RemoveFile: ");
     AppendNumberTo(&r, deleted_files_kvp.first);
-    // modify by mio
+
     r.append("addr: ");
     AppendNumberTo(&r, (uint64_t)deleted_files_kvp.second);
   }

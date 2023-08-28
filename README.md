@@ -20,6 +20,7 @@ GRUB_CMDLINE_LINUX="memmap=nn[KMG]!ss[KMG]"
 sudo apt update
 sudo apt install numactl
 
+sudo numactl --show
 ```
 
 

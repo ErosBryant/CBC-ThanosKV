@@ -1,4 +1,4 @@
-// Add by MioDB
+
 // Use datatable to replace sstable in NVM
 
 #include "NVM/datatable.h"

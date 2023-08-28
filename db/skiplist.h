@@ -151,12 +151,12 @@ class SkipList {
 
  private:
 
-  /* change to public by mio
+  /* change to public 
   inline int GetMaxHeight() const {
     return max_height_.load(std::memory_order_relaxed);
   } */
 
-  // add parameter len by mio
+  // add parameter len 
   Node* NewNode(const Key& key, int height, const size_t& len);
   int RandomHeight();
   bool Equal(const Key& a, const Key& b) const { return (compare_(a, b) == 0); }
@@ -181,7 +181,7 @@ class SkipList {
 
   // Immutable after construction
   Comparator const compare_;
-  /* change to public by mio
+  /* change to public 
   Arena* const arena_;  // Arena used for allocations of nodes
 
   Node* const head_;*/
@@ -194,7 +194,7 @@ class SkipList {
   Random rnd_;
 
   // ------------------------------------------------------------------------------------
-  // Add by mio
+
   // private parameter
   bool UseBloomFilter;
   bool IsLastTable;
@@ -404,14 +404,14 @@ typename SkipList<Key, Comparator>::Node* SkipList<Key, Comparator>::FindLast()
   }
 }
 
-// modify by mio
+
 template <typename Key, class Comparator>
 SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
     : UseBloomFilter(false),
       IsLastTable(false),
       compare_(cmp),
       arena_(arena),
-      head_(NewNode(0 /* any key will do */, kMaxHeight, 0 /*add by mio*/)),
+      head_(NewNode(0 /* any key will do */, kMaxHeight, 0 /*add */)),
       max_height_(1),
       rnd_(0xdeadbeef) {
   for (int i = 0; i < kMaxHeight; i++) {
@@ -465,7 +465,7 @@ bool SkipList<Key, Comparator>::Contains(const Key& key) const {
   }
 }
 
-// Add by mio, 2020/5/14
+
 // serve for small datatable
 template <typename Key, class Comparator>
 SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena,

@@ -169,6 +169,8 @@ class VersionSet {
  public:
   VersionSet(const std::string& dbname, const Options* options,
              TableCache* table_cache, const InternalKeyComparator*);
+  VersionSet(const std::string& dbname, const Options* options,
+             const InternalKeyComparator*);
   VersionSet(const VersionSet&) = delete;
   VersionSet& operator=(const VersionSet&) = delete;
 

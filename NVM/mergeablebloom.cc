@@ -1,11 +1,11 @@
-// Add by MioDB
+
 // Mergeable bloom filters can accelerate datatables' query requests
 
 #include "NVM/mergeablebloom.h"
 
 namespace leveldb {
 
-MergeableBloom::MergeableBloom(const Options& options_): bits_per_key_(options_.bits_per_key) {    // n = highest level DataTable size / KV size, it should be a constant in miodb
+MergeableBloom::MergeableBloom(const Options& options_): bits_per_key_(options_.bits_per_key) {    // n = highest level DataTable size / KV size
   int n = options_.keys_per_datatable;
 
   size_t bits = n * bits_per_key_;
