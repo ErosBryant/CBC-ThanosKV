@@ -26,7 +26,7 @@ sudo numactl --show
 
 
 
-### Download
+## Download
 ```bash
 git clone --recurse-submodules https://github.com/ErosBryant/Thanoskv.git
 
@@ -38,9 +38,22 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
 
 
-## set nvm version
+## Set nvm version
 
 ```
 source scripts/setvars.sh
 scripts/mount_dax.sh
 ```
+
+- ### git
+```
+git log
+git restore .
+git checkout ___
+
+
+- branch
+git checkout __
+```
+
+
