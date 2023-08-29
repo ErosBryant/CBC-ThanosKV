@@ -550,7 +550,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit
   Status s;
   {
     mutex_.Unlock();
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_ssd_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
 
@@ -1512,7 +1512,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (!force &&
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
-      // mem_->ApproximateMemoryUsage() + MemTable::Add():encoded_length <= options_write_buffer_size!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      // mem_->ApproximateMemoryUsage() + MemTable::Add():encoded_length <= options_write_buffer_size!!
       break;
     } else if (imm_ != nullptr) { 
       
@@ -1595,9 +1595,9 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
   std::cout<<  "--------------------------------------------------"<<std::endl;
   std::cout << "\nwrite in SSD size (MB):" <<_stats_.bytes_written/ 1048576.0 << std::endl;
   
-  std::cout << "memtable stall time: " << mem_stall_time_ << "  us" << std::endl;
-  std::cout << "L0 stall time: " << L0_stop_stall_time_ << "  us" << std::endl; 
-  std::cout << "L0 slow stall time: " << l0_slow_tall_time_<< "  us" << std::endl; 
+  std::cout << "memtable stall time: " <<1.0 * mem_stall_time_ /1000000 << " s" << std::endl;
+  std::cout << "L0 stall time: " << 1.0 * L0_stop_stall_time_ /1000000<< "  s" << std::endl; 
+    std::cout << "L0 slow stall time: " << 1.0 * l0_slow_tall_time_ /1000000 << "  s" << std::endl; 
 
 
     char buf[200];
