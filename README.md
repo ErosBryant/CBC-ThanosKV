@@ -19,6 +19,7 @@ GRUB_CMDLINE_LINUX="memmap=nn[KMG]!ss[KMG]"
 ```bash
 sudo apt update
 sudo apt install numactl
+sudo apt-get install libnuma-dev
 
 sudo numactl --show
 ```
