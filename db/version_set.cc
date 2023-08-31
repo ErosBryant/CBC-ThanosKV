@@ -730,6 +730,7 @@ class VersionSet::Builder {
     cmp.internal_comparator = &vset_->icmp_;
     DataTable* lasttable;
     for (int level = 0; level < config::kNumLevels; level++) {
+     // printf("level: %d\n", level);
       // Merge the set of added files with the set of pre-existing files.
       // Drop any deleted files.  Store the result in *v.
       //const std::vector<FileMetaData*>& base_files = base_->files_[level];
@@ -740,71 +741,16 @@ class VersionSet::Builder {
       std::vector<FileMetaData*>::iterator base_end = base_files.end();
       const FileSet* added_files = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added_files->size());
-
-      /*for(; base_iter != base_end; ++base_iter) {
-        MaybeAddFile(v, level, *base_iter);
-      }
-      for (const auto& added_file: *added_files) {
-        MaybeAddFile(v, level, added_file);
-      }*/
       lasttable = nullptr;
       for (; base_iter != base_end; ++base_iter) {
         MaybeAddFile(v, level, *base_iter, true);
-        /*if (MaybeAddFile(v, level, *base_iter)) {
-          if (lasttable == nullptr) {
-            lasttable = (*base_iter)->dt;
-          } else {
-            (*base_iter)->dt->pairingtable = lasttable;
-            lasttable->pairingtable = (*base_iter)->dt;
-            lasttable = nullptr;
-          }
-        }*/
+
       }
       for (const auto& added_file: *added_files) {
         //std::cout << "add file: " << added_file->dt << std::endl;
         MaybeAddFile(v, level, added_file, false);
-        /*if (MaybeAddFile(v, level, added_file)) {
-          if (lasttable == nullptr) {
-            lasttable = added_file->dt;
-          } else {
-            added_file->dt->pairingtable = lasttable;
-            lasttable->pairingtable = added_file->dt;
-            lasttable = nullptr;
-          }
-        }*/
-      }
-      /* 
-      for (const auto& added_file : *added_files) {
-        // Add all smaller files listed in base_
-        for (std::vector<FileMetaData*>::const_iterator bpos =
-                 std::upper_bound(base_iter, base_end, added_file, cmp);
-             base_iter != bpos; ++base_iter) {
-          MaybeAddFile(v, level, *base_iter);
-        }
 
-        MaybeAddFile(v, level, added_file);
       }
-
-      // Add remaining base files
-      for (; base_iter != base_end; ++base_iter) {
-        MaybeAddFile(v, level, *base_iter);
-      }
-
-#ifndef NDEBUG
-      // Make sure there is no overlap in levels > 0
-      if (level > 0) {
-        for (uint32_t i = 1; i < v->files_[level].size(); i++) {
-          const InternalKey& prev_end = v->files_[level][i - 1]->largest;
-          const InternalKey& this_begin = v->files_[level][i]->smallest;
-          if (vset_->icmp_.Compare(prev_end, this_begin) >= 0) {
-            std::fprintf(stderr, "overlapping ranges in same level %s vs. %s\n",
-                         prev_end.DebugString().c_str(),
-                         this_begin.DebugString().c_str());
-            std::abort();
-          }
-        }
-      }
-#endif*/
     }
   }
 
@@ -972,6 +918,7 @@ Status VersionSet::Recover(bool* save_manifest) {
   std::string current;
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
+    printf("current: %s\n", current.c_str());
     return s;
   }
   if (current.empty() || current[current.size() - 1] != '\n') {

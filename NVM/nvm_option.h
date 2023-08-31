@@ -5,7 +5,7 @@
 namespace leveldb {
 
 struct NVMOption {
-  std::string pmem_path = "/mnt/pmemdir/dbbench";
+  std::string pmem_path = "/mnt/pmemdir/";
   //size_t nvm_write_buffer_size = 4* 1024 * 1024 * 1024;
 };
 

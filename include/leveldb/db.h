@@ -50,6 +50,7 @@ class LEVELDB_EXPORT DB {
   // OK on success.
   // Stores nullptr in *dbptr and returns a non-OK status on error.
   // Caller should delete *dbptr when it is no longer needed.
+
   // static Status Open(const Options& options,
   //                    const std::string& name_disk,
   //                    const std::string& name_mem,
@@ -158,8 +159,8 @@ class LEVELDB_EXPORT DB {
 //
 // Note: For backwards compatibility, if DestroyDB is unable to list the
 // database files, Status::OK() will still be returned masking this failure.
+// Status DestroyDB(const std::string& dbname_disk, const std::string& dbname_mem, const Options& options);
 Status DestroyDB(const std::string& name_disk,  const Options& options);
-
 
 // If a DB cannot be opened, you may attempt to call this method to
 // resurrect as much of the contents of the database as possible.

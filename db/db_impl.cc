@@ -136,21 +136,22 @@ static int TableCacheSize(const Options& sanitized_options) {
   return sanitized_options.max_open_files - kNumNonTableCacheFiles;
 }
 
-DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
+// DBImpl::DBImpl(const Options& raw_options, const std::string& dbname_disk, const std::string& dbname_mem)
+DBImpl::DBImpl(const Options& raw_options, const std::string& dbname_)
     : env_(raw_options.env),
 
       internal_comparator_(raw_options.comparator),
       internal_filter_policy_(raw_options.filter_policy),
-      options_(SanitizeOptions(dbname, &internal_comparator_,
+      options_(SanitizeOptions(dbname_, &internal_comparator_,
                                &internal_filter_policy_, raw_options)),
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
-      dbname_(raw_options.nvm_option.pmem_path),
-      dbname_ssd_(dbname_),
+      dbname_(dbname_),
+     // dbname_ssd_(dbname_disk),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
       l0_slow_tall_time_(0),
-      table_cache_(new TableCache(dbname_ssd_, options_, TableCacheSize(options_))),
+      table_cache_(new TableCache(dbname_, options_, TableCacheSize(options_))),
       db_lock_(nullptr),
       shutting_down_(false),
       background_work_finished_signal_(&mutex_),
@@ -163,11 +164,9 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       //background_compaction_scheduled_(false),
-      // make new versions for ssd 
       manual_compaction_(nullptr),
-      // this version is for nvm
-      versions_sst(new VersionSet(dbname_ssd_, &options_, table_cache_,
-                               &internal_comparator_)),
+      // versions_sst(new VersionSet(dbname_ssd_, &options_, table_cache_,
+      //                          &internal_comparator_)),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
   
@@ -334,6 +333,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // committed only when the descriptor is created, and this directory
   // may already exist from a previous failed creation attempt.
   env_->CreateDir(dbname_);
+  //env_->CreateDir(dbname_ssd_);
   assert(db_lock_ == nullptr);
   Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
   if (!s.ok()) {
@@ -550,7 +550,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit
   Status s;
   {
     mutex_.Unlock();
-    s = BuildTable(dbname_ssd_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
 
@@ -1673,10 +1673,17 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
-Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
+// Status DB::Open(const Options& options, const std::string& dbname_disk,
+//         const std::string& dbname_mem, DB** dbptr) {
+  Status DB::Open(const Options& options, const std::string& dbname_, DB** dbptr) {
   *dbptr = nullptr;
 
-  DBImpl* impl = new DBImpl(options, dbname);
+  // DBImpl* impl = new DBImpl(options, dbname_disk, dbname_mem);
+  DBImpl* impl = new DBImpl(options,dbname_);
+  // printf("dbname_disk: %s\n",  impl->dbname_ssd_.c_str());
+  // printf("dbname_mem: %s\n",  impl->dbname_.c_str());
+
+
   impl->mutex_.Lock();
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
@@ -1684,9 +1691,9 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   Status s = impl->Recover(&edit, &save_manifest);
   if (s.ok() && impl->mem_ == nullptr) {
     // Create new log and a corresponding memtable.
-    uint64_t new_log_number = impl->versions_->NewFileNumber();
-    WritableFile* lfile;
-    s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),
+  uint64_t new_log_number = impl->versions_->NewFileNumber();
+  WritableFile* lfile;                        
+      s = options.env->NewWritableFile(LogFileName(dbname_, new_log_number),
                                      &lfile);
     if (s.ok()) {
       edit.SetLogNumber(new_log_number);
@@ -1696,6 +1703,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
       impl->mem_ = new MemTable(impl->internal_comparator_, options.write_buffer_size + 4 * 1024 * 1024);
       impl->mem_->Ref();
     }
+    
   }
   if (s.ok() && save_manifest) {
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
@@ -1712,7 +1720,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
 
   impl->mutex_.Unlock();
   if (s.ok()) {
-
+    
     assert(impl->mem_ != nullptr);
     *dbptr = impl;
 

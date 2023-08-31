@@ -34,8 +34,8 @@ class DBImpl : public DB {
     uint64_t L0_stop_stall_time_;  
     uint64_t l0_slow_tall_time_ ;
 
-  //DBImpl(const Options& options, const std::string& dbname_disk, const std::string& dbname_mem);
-  DBImpl(const Options& options, const std::string& dbname_);
+  // DBImpl(const Options& options, const std::string& dbname_disk, const std::string& dbname_mem);
+ DBImpl(const Options& options, const std::string& dbname_);
   DBImpl(const DBImpl&) = delete;
   DBImpl& operator=(const DBImpl&) = delete;
 
@@ -261,7 +261,7 @@ class DBImpl : public DB {
   //n for read pmtable
   VersionSet* const versions_ GUARDED_BY(mutex_);
   // for read sstable
-  VersionSet* const versions_sst GUARDED_BY(mutex_);
+  //VersionSet* const versions_sst GUARDED_BY(mutex_);
   CompactionStattossd _stats_ GUARDED_BY(mutex_);
 };
 
