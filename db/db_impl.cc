@@ -137,17 +137,18 @@ static int TableCacheSize(const Options& sanitized_options) {
 }
 
 // DBImpl::DBImpl(const Options& raw_options, const std::string& dbname_disk, const std::string& dbname_mem)
-DBImpl::DBImpl(const Options& raw_options, const std::string& dbname_)
+DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
     : env_(raw_options.env),
 
       internal_comparator_(raw_options.comparator),
       internal_filter_policy_(raw_options.filter_policy),
-      options_(SanitizeOptions(dbname_, &internal_comparator_,
+      options_(SanitizeOptions(dbname, &internal_comparator_,
                                &internal_filter_policy_, raw_options)),
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
-      dbname_(dbname_),
-     // dbname_ssd_(dbname_disk),
+      //dbname_(raw_options.nvm_option.pmem_path),
+      //bname_ssd_(dbname_),
+      dbname_(dbname),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
       l0_slow_tall_time_(0),
