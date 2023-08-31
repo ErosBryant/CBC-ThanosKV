@@ -261,7 +261,7 @@ class DBImpl : public DB {
   //n for read pmtable
   VersionSet* const versions_ GUARDED_BY(mutex_);
   // for read sstable
-  //VersionSet* const versions_sst GUARDED_BY(mutex_);
+  VersionSet* const versions_sst GUARDED_BY(mutex_);
   CompactionStattossd _stats_ GUARDED_BY(mutex_);
 };
 

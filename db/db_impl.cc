@@ -147,12 +147,12 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
       //dbname_(raw_options.nvm_option.pmem_path),
-      //bname_ssd_(dbname_),
+      dbname_ssd_(raw_options.nvm_option.sst_path),
       dbname_(dbname),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
       l0_slow_tall_time_(0),
-      table_cache_(new TableCache(dbname_, options_, TableCacheSize(options_))),
+      table_cache_(new TableCache(dbname_ssd_, options_, TableCacheSize(options_))),
       db_lock_(nullptr),
       shutting_down_(false),
       background_work_finished_signal_(&mutex_),
@@ -166,8 +166,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       tmp_batch_(new WriteBatch),
       //background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
-      // versions_sst(new VersionSet(dbname_ssd_, &options_, table_cache_,
-      //                          &internal_comparator_)),
+      versions_sst(new VersionSet(dbname_ssd_, &options_, table_cache_,
+                               &internal_comparator_)),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
   
@@ -334,7 +334,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // committed only when the descriptor is created, and this directory
   // may already exist from a previous failed creation attempt.
   env_->CreateDir(dbname_);
-  //env_->CreateDir(dbname_ssd_);
+  env_->CreateDir(dbname_ssd_);
   assert(db_lock_ == nullptr);
   Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
   if (!s.ok()) {
@@ -539,8 +539,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   return status;
 }
 
-Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit
-                                ) {
+Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
@@ -551,7 +550,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit
   Status s;
   {
     mutex_.Unlock();
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_ssd_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
 
