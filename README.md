@@ -34,7 +34,8 @@ git clone --recurse-submodules https://github.com/ErosBryant/Thanoskv.git
 ```
 
 ```bash
-mkdir -p build && cd build
+
+cd Thanoskv && mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
 
