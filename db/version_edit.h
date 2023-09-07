@@ -15,6 +15,7 @@
 namespace leveldb {
 
 class VersionSet;
+class VersionSet_sst;
 
 struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
@@ -124,6 +125,7 @@ class VersionEdit {
 
  private:
   friend class VersionSet;
+  friend class VersionSet_sst;
 
   //typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
   typedef std::set<std::pair<int, DataTable*>> DeletedFileSet;
@@ -142,7 +144,7 @@ class VersionEdit {
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
-   std::vector<FileMetaData> _new_files_;
+  std::vector<FileMetaData> _new_files_;
 };
 
 }  // namespace leveldb

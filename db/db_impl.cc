@@ -22,6 +22,7 @@
 #include "db/memtable.h"
 #include "db/table_cache.h"
 #include "db/version_set.h"
+#include "db/version_bt.h"
 #include "db/write_batch_internal.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
@@ -47,6 +48,7 @@ const int kNumNonTableCacheFiles = 10;
 uint64_t mem_hits=0;
 uint64_t imm_hits=0;
 uint64_t PMtable_hits = 0;
+uint64_t Btree_hits = 0;
 
 
 // Information kept for every waiting writer
@@ -166,9 +168,9 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       tmp_batch_(new WriteBatch),
       //background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
-      versions_sst(new VersionSet(dbname_ssd_, &options_, table_cache_,
+      versions_sst(new VersionSet_sst(dbname_ssd_, &options_, table_cache_,
                                &internal_comparator_)),
-      versions_(new VersionSet(dbname_, &options_, table_cache_,
+      versions_(new VersionSet(dbname_, &options_,
                                &internal_comparator_)) {
 
     for (int i = 0; i < config::kNumLevels; i++) {
@@ -180,8 +182,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
 
-    fprintf(stderr,"mem_hits %lu, imm_hits %lu, PMtable_hits %lu \n",
-            mem_hits, imm_hits, PMtable_hits);
+    fprintf(stderr,"mem_hits %lu, imm_hits %lu, PMtable_hits %lu, B+tree_hits %lu \n",
+            mem_hits, imm_hits, PMtable_hits,Btree_hits);
     NvmUsagePrint();
   mutex_.Lock();
   shutting_down_.store(true, std::memory_order_release);
@@ -830,7 +832,7 @@ void DBImpl::BackgroundCompaction(int level) {
         //std::cout << "After compaction, Single level : "<< _stats_.bytes_written << std::endl;
       // }
   }else {
- //   if (level > 0 && level < config::kNumLevels - 2) {
+ // if (level > 0 && level < config::kNumLevels - 2) {
 
     //std::cout << "Before compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
     s = DoCompactionWork(compact);
@@ -1267,10 +1269,12 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
 
   MemTable* mem = mem_;
   MemTable* imm = imm_;
-  Version* current = versions_->current();
+  Version* PM_current = versions_->current();
+  Version_sst* BT_current = versions_sst->current();
   mem->Ref();
   if (imm != nullptr) imm->Ref();
-  current->Ref();
+  PM_current->Ref();
+  BT_current->Ref();
 
   bool have_stat_update = false;
   Version::GetStats stats;
@@ -1286,22 +1290,22 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
        imm_hits++;
       // Done
-    } else {
-      s = current->Get(options, lkey, value, &stats);
-      have_stat_update = true;
+    } else if ( PM_current->Get(options, lkey, value, &stats)) {
       PMtable_hits++;
-    }
+    } else {
+    s = BT_current->Get(options, lkey, value);
+    have_stat_update = true;
+     Btree_hits++;
     mutex_.Lock();
   }
 
-  /*if (have_stat_update && current->UpdateStats(stats)) {
-    for (int i = 0; i < config::kNumLevels; i++) {
-      MaybeScheduleCompaction(i);
-    }
-  }*/
+  }
+
+
   mem->Unref();
   if (imm != nullptr) imm->Unref();
-  current->Unref();
+  PM_current->Unref();
+  BT_current->Unref();
   return s;
 }
 

@@ -172,6 +172,9 @@ target_sources(leveldb
     "db/version_edit.h"
     "db/version_set.cc"
     "db/version_set.h"
+    "db/version_bt.cc"
+    "db/version_bt.h"
+    
     "db/write_batch_internal.h"
     "db/write_batch.cc"
     "port/port_stdcxx.h"

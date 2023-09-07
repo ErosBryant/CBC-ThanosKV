@@ -7,13 +7,14 @@
 // around to provide a consistent view to live iterators.
 //
 // Each Version keeps track of a set of Table files per level.  The
-// entire set of versions is maintained in a VersionSet.
+// entire set of versions is maintained in a VersionSet_sst_sst.
 //
-// Version,VersionSet are thread-compatible, but require external
+// Version,VersionSet_sst_sst are thread-compatible, but require external
 // synchronization on all accesses.
 
-#ifndef STORAGE_LEVELDB_DB_VERSION_SET_H_
-#define STORAGE_LEVELDB_DB_VERSION_SET_H_
+
+#ifndef  VERSION_BT_H
+#define  VERSION_BT_H
 
 #include <map>
 #include <set>
@@ -23,6 +24,7 @@
 #include "db/version_edit.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+#include "db/version_set.h"
 
 namespace leveldb {
 
@@ -30,14 +32,15 @@ namespace log {
 class Writer;
 }
 
-class Compaction;
+class Compaction_sst;
 class Iterator;
 class MemTable;
 class TableBuilder;
 class TableCache;
-class Version;
-class VersionSet;
+class Version_sst;
+class VersionSet_sst;
 class WritableFile;
+
 
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
@@ -57,7 +60,7 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
-class Version {
+class Version_sst {
  public:
   struct GetStats {
     FileMetaData* seek_file;
@@ -66,23 +69,23 @@ class Version {
 
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
-  // REQUIRES: This version has been saved (see VersionSet::SaveTo)
+  // REQUIRES: This version has been saved (see VersionSet_sst::SaveTo)
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
-  bool Get(const ReadOptions&, const LookupKey& key, std::string* val,
-             GetStats* stats);
 
+
+  Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
   // Adds "stats" into the current state.  Returns true if a new
-  // compaction may need to be triggered, false otherwise.
+  // Compaction_sst may need to be triggered, false otherwise.
   // REQUIRES: lock is held
   bool UpdateStats(const GetStats& stats);
 
   // Record a sample of bytes read at the specified internal key.
   // Samples are taken approximately once every config::kReadBytesPeriod
-  // bytes.  Returns true if a new compaction may need to be triggered.
+  // bytes.  Returns true if a new Compaction_sst may need to be triggered.
   // REQUIRES: lock is held
   bool RecordReadSample(Slice key);
 
@@ -104,7 +107,7 @@ class Version {
   bool OverlapInLevel(int level, const Slice* smallest_user_key,
                       const Slice* largest_user_key);
 
-  // Return the level at which we should place a new memtable compaction
+  // Return the level at which we should place a new memtable Compaction_sst
   // result that covers the range [smallest_user_key,largest_user_key].
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
@@ -115,12 +118,12 @@ class Version {
   std::string DebugString() const;
 
  private:
-  friend class Compaction;
-  friend class VersionSet;
+  friend class Compaction_sst;
+  friend class VersionSet_sst;
 
   class LevelFileNumIterator;
 
-  explicit Version(VersionSet* vset)
+  explicit Version_sst(VersionSet_sst* vset)
       : vset_(vset),
         next_(this),
         prev_(this),
@@ -130,10 +133,10 @@ class Version {
         compaction_score_(-1),
         compaction_level_(-1) {}
 
-  Version(const Version&) = delete;
-  Version& operator=(const Version&) = delete;
+  Version_sst(const Version_sst&) = delete;
+  Version_sst& operator=(const Version_sst&) = delete;
 
-  ~Version();
+  ~Version_sst();
 
   Iterator* NewConcatenatingIterator(const ReadOptions&, int level) const;
 
@@ -145,9 +148,9 @@ class Version {
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet* vset_;  // VersionSet to which this Version belongs
-  Version* next_;     // Next version in linked list
-  Version* prev_;     // Previous version in linked list
+  VersionSet_sst* vset_;  // VersionSet_sst to which this Version belongs
+  Version_sst* next_;     // Next version in linked list
+  Version_sst* prev_;     // Previous version in linked list
   int refs_;          // Number of live refs to this version
 
   // List of files per level
@@ -158,21 +161,22 @@ class Version {
   FileMetaData* file_to_compact_;
   int file_to_compact_level_;
 
-  // Level that should be compacted next and its compaction score.
-  // Score < 1 means compaction is not strictly needed.  These fields
+  // Level that should be compacted next and its Compaction_sst score.
+  // Score < 1 means Compaction_sst is not strictly needed.  These fields
   // are initialized by Finalize().
   double compaction_score_;
   int compaction_level_;
 };
 
-class VersionSet {
+class VersionSet_sst {
  public:
-  VersionSet(const std::string& dbname, const Options* options,
+  VersionSet_sst(const std::string& dbname, const Options* options,
+            TableCache* table_cache,
              const InternalKeyComparator*);
-  VersionSet(const VersionSet&) = delete;
-  VersionSet& operator=(const VersionSet&) = delete;
+  VersionSet_sst(const VersionSet_sst&) = delete;
+  VersionSet_sst& operator=(const VersionSet_sst&) = delete;
 
-  ~VersionSet();
+  ~VersionSet_sst();
 
   // Apply *edit to the current version to form a new descriptor that
   // is both saved to persistent state and installed as the new
@@ -186,11 +190,12 @@ class VersionSet {
   Status Recover(bool* save_manifest);
 
   // Return the current version.
-  Version* current() const { return current_; }
+  Version_sst* current() const { return current_; }
 
 // b+tree
   const Options* const options() { return options_; }
-
+  TableCache* cache() { return table_cache_; }
+  // Return the current manifest file number
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 
   // Allocate and return a new file number
@@ -230,37 +235,37 @@ class VersionSet {
   // being compacted, or zero if there is no such log file.
   uint64_t PrevLogNumber() const { return prev_log_number_; }
 
-  // Pick level and inputs for a new compaction.
-  // Returns nullptr if there is no compaction to be done.
+  // Pick level and inputs for a new Compaction_sst.
+  // Returns nullptr if there is no Compaction_sst to be done.
   // Otherwise returns a pointer to a heap-allocated object that
-  // describes the compaction.  Caller should delete the result.
+  // describes the Compaction_sst.  Caller should delete the result.
 
-  Compaction* PickCompaction(int arrivallevel);
+  Compaction_sst* PickCompaction(int arrivallevel);
 
-  // Return a compaction object for compacting the range [begin,end] in
+  // Return a Compaction_sst object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
   // level that overlaps the specified range.  Caller should delete
   // the result.
-  Compaction* CompactRange(int level, const InternalKey* begin,
+  Compaction_sst* CompactRange(int level, const InternalKey* begin,
                            const InternalKey* end);
 
   // Return the maximum overlapping data (in bytes) at next level for any
   // file at a level >= 1.
   int64_t MaxNextLevelOverlappingBytes();
 
-  // Create an iterator that reads over the compaction inputs for "*c".
+  // Create an iterator that reads over the Compaction_sst inputs for "*c".
   // The caller should delete the iterator when no longer needed.
-  Iterator* MakeInputIterator(Compaction* c);
+  Iterator* MakeInputIterator(Compaction_sst* c);
 
-  // Returns true iff some level needs a compaction.
+  // Returns true iff some level needs a Compaction_sst.
   bool NeedsCompaction() const {
-    Version* v = current_;
+    Version_sst* v = current_;
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
   }
 
   bool NeedsCompaction(int arrivallevel) const {
     assert(arrivallevel > 0 && arrivallevel < config::kNumLevels);
-    Version* v = current_;
+    Version_sst* v = current_;
     return (v->level_score_[arrivallevel - 1] >= 1)/* || (v->file_to_compact_ != nullptr)*/;
   }
   
@@ -270,7 +275,7 @@ class VersionSet {
 
   // Return the approximate offset in the database of the data for
   // "key" as of version "v".
-  uint64_t ApproximateOffsetOf(Version* v, const InternalKey& key);
+  uint64_t ApproximateOffsetOf(Version_sst* v, const InternalKey& key);
 
   // Return a human-readable short (single-line) summary of the number
   // of files per level.  Uses *scratch as backing store.
@@ -282,12 +287,12 @@ class VersionSet {
  private:
   class Builder;
 
-  friend class Compaction;
-  friend class Version;
+  friend class Compaction_sst;
+  friend class Version_sst;
 
   bool ReuseManifest(const std::string& dscname, const std::string& dscbase);
 
-  void Finalize(Version* v);
+  void Finalize(Version_sst* v);
 
   void GetRange(const std::vector<FileMetaData*>& inputs, InternalKey* smallest,
                 InternalKey* largest);
@@ -296,16 +301,17 @@ class VersionSet {
                  const std::vector<FileMetaData*>& inputs2,
                  InternalKey* smallest, InternalKey* largest);
 
-  void SetupOtherInputs(Compaction* c);
+  void SetupOtherInputs(Compaction_sst* c);
 
   // Save current contents to *log
   Status WriteSnapshot(log::Writer* log);
 
-  void AppendVersion(Version* v);
+  void AppendVersion(Version_sst* v);
 
   Env* const env_;
   const std::string dbname_;
   const Options* const options_;
+  TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_;
@@ -316,25 +322,26 @@ class VersionSet {
   // Opened lazily
   WritableFile* descriptor_file_;
   log::Writer* descriptor_log_;
-  Version dummy_versions_;  // Head of circular doubly-linked list of versions.
-  Version* current_;        // == dummy_versions_.prev_
+  Version_sst dummy_versions_;  // Head of circular doubly-linked list of versions.
+  Version_sst* current_;        // == dummy_versions_.prev_
 
-  // Per-level key at which the next compaction at that level should start.
+  // Per-level key at which the next Compaction_sst at that level should start.
   // Either an empty string, or a valid InternalKey.
   std::string compact_pointer_[config::kNumLevels];
 };
 
-// A Compaction encapsulates information about a compaction.
-class Compaction {
+//cmpaction encapsulates information about a Compaction_sst.
+class Compaction_sst {
  public:
-  ~Compaction();
+  ~Compaction_sst();
+  
 
   // Return the level that is being compacted.  Inputs from "level"
   // and "level+1" will be merged to produce a set of "level+1" files.
   int level() const { return level_; }
 
   // Return the object that holds the edits to the descriptor done
-  // by this compaction.
+  // by this Compaction_sst.
   VersionEdit* edit() { return &edit_; }
 
   // "which" must be either 0 or 1
@@ -343,18 +350,18 @@ class Compaction {
   // Return the ith input file at "level()+which" ("which" must be 0 or 1).
   FileMetaData* input(int which, int i) const { return inputs_[which][i]; }
 
-  // Maximum size of files to build during this compaction.
+  // Maximum size of files to build during this Compaction_sst.
   uint64_t MaxOutputFileSize() const { return max_output_file_size_; }
 
-  // Is this a trivial compaction that can be implemented by just
+  // Is this a trivial Compaction_sst that can be implemented by just
   // moving a single input file to the next level (no merging or splitting)
   bool IsTrivialMove() const;
 
-  // Add all inputs to this compaction as delete operations to *edit.
+  // Add all inputs to this Compaction_sst as delete operations to *edit.
   void AddInputDeletions(VersionEdit* edit);
 
   // Returns true if the information we have available guarantees that
-  // the compaction is producing data in "level+1" for which no data exists
+  // the Compaction_sst is producing data in "level+1" for which no data exists
   // in levels greater than "level+1".
   bool IsBaseLevelForKey(const Slice& user_key);
 
@@ -362,22 +369,22 @@ class Compaction {
   // before processing "internal_key".
   bool ShouldStopBefore(const Slice& internal_key);
 
-  // Release the input version for the compaction, once the compaction
+  // Release the input version for the Compaction_sst, once the Compaction_sst
   // is successful.
   void ReleaseInputs();
 
  private:
-  friend class Version;
-  friend class VersionSet;
-
-  Compaction(const Options* options, int level);
+  friend class Version_sst;
+  friend class VersionSet_sst;
+  
+ Compaction_sst(const Options* options, int level);
 
   int level_;
   uint64_t max_output_file_size_;
-  Version* input_version_;
+  Version_sst* input_version_;
   VersionEdit edit_;
 
-  // Each compaction reads inputs from "level_" and "level_+1"
+  // Each Compaction_sst reads inputs from "level_" and "level_+1"
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
 
   // State used to check for number of overlapping grandparent files
@@ -392,13 +399,15 @@ class Compaction {
 
   // level_ptrs_ holds indices into input_version_->levels_: our state
   // is that we are positioned at one of the file ranges for each
-  // higher level than the ones involved in this compaction (i.e. for
+  // higher level than the ones involved in this Compaction_sst (i.e. for
   // all L >= level_ + 2).
   size_t level_ptrs_[config::kNumLevels];
 };
 
-
-
 }  // namespace leveldb
 
-#endif  // STORAGE_LEVELDB_DB_VERSION_SET_H_
+
+
+  // namespace leveldb
+
+#endif // VERSION_BT_H

@@ -9,7 +9,7 @@
 namespace leveldb {
 
 BtreeIndex::BtreeIndex() : condvar_(&mutex_) {
-  printf("btree index\n");
+  //printf("btree index\n");
   bgstarted_ = false;
 }
 

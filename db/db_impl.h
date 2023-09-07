@@ -14,9 +14,11 @@
 #include "db/log_writer.h"
 #include "db/snapshot.h"
 #include "leveldb/db.h"
+#include "db/version_bt.h"
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+
 
 #include "NVM/datatable.h"
 namespace leveldb {
@@ -24,8 +26,11 @@ namespace leveldb {
 class MemTable;
 class TableCache;
 class Version;
+class Version_sst;
 class VersionEdit;
 class VersionSet;
+class VersionSet_sst;
+
 
 class DBImpl : public DB {
  public:
@@ -261,7 +266,7 @@ class DBImpl : public DB {
   //n for read pmtable
   VersionSet* const versions_ GUARDED_BY(mutex_);
   // for read sstable
-  VersionSet* const versions_sst GUARDED_BY(mutex_);
+  VersionSet_sst* const versions_sst GUARDED_BY(mutex_);
   CompactionStattossd _stats_ GUARDED_BY(mutex_);
 };
 
