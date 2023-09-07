@@ -9,6 +9,7 @@
 
 #include "leveldb/export.h"
 #include "NVM/nvm_option.h"
+#include "leveldb/index.h"
 
 namespace leveldb {
 
@@ -18,6 +19,7 @@ class Env;
 class FilterPolicy;
 class Logger;
 class Snapshot;
+class Index;
 
 // DB contents are stored in a set of blocks, each of which holds a
 // sequence of key,value pairs.  Each block may be compressed before
@@ -52,6 +54,9 @@ struct LEVELDB_EXPORT Options {
   int nvm_next_node = 0;
   // numactl --hardware
 
+  // [B-tree] Added
+  // Global index
+  Index* index;
   NVMOption nvm_option;
 
   // -------------------

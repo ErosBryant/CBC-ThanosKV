@@ -54,7 +54,7 @@ class Repairer {
         owns_cache_(options_.block_cache != options.block_cache),
         next_file_number_(1) {
     // TableCache can be small since we expect each table to be opened once.
-    table_cache_ = new TableCache(dbname_, options_, 10);
+    table_cache_ = new TableCache(dbname_,&options_, 10);
   }
 
   ~Repairer() {
@@ -302,7 +302,8 @@ class Repairer {
     if (!s.ok()) {
       return;
     }
-    TableBuilder* builder = new TableBuilder(options_, file);
+    //TableBuilder* builder = new TableBuilder(options_, file);
+     TableBuilder* builder = new TableBuilder(options_, file, next_file_number_-1);
 
     // Copy data.
     Iterator* iter = NewTableIterator(t.meta);

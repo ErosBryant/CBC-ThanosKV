@@ -5,9 +5,8 @@
 #ifndef STORAGE_LEVELDB_TABLE_FORMAT_H_
 #define STORAGE_LEVELDB_TABLE_FORMAT_H_
 
-#include <cstdint>
 #include <string>
-
+#include <cstdint>
 #include "leveldb/slice.h"
 #include "leveldb/status.h"
 #include "leveldb/table_builder.h"
@@ -22,10 +21,8 @@ struct ReadOptions;
 // block or a meta block.
 class BlockHandle {
  public:
-  // Maximum encoding length of a BlockHandle
-  enum { kMaxEncodedLength = 10 + 10 };
-
   BlockHandle();
+  BlockHandle(uint64_t size, uint64_t offset);
 
   // The offset of the block in the file.
   uint64_t offset() const { return offset_; }
@@ -38,6 +35,9 @@ class BlockHandle {
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* input);
 
+  // Maximum encoding length of a BlockHandle
+  enum { kMaxEncodedLength = 10 + 10 };
+
  private:
   uint64_t offset_;
   uint64_t size_;
@@ -47,11 +47,6 @@ class BlockHandle {
 // end of every table file.
 class Footer {
  public:
-  // Encoded length of a Footer.  Note that the serialization of a
-  // Footer will always occupy exactly this many bytes.  It consists
-  // of two block handles and a magic number.
-  enum { kEncodedLength = 2 * BlockHandle::kMaxEncodedLength + 8 };
-
   Footer() = default;
 
   // The block handle for the metaindex block of the table
@@ -59,11 +54,22 @@ class Footer {
   void set_metaindex_handle(const BlockHandle& h) { metaindex_handle_ = h; }
 
   // The block handle for the index block of the table
-  const BlockHandle& index_handle() const { return index_handle_; }
-  void set_index_handle(const BlockHandle& h) { index_handle_ = h; }
+  const BlockHandle& index_handle() const {
+    return index_handle_;
+  }
+  void set_index_handle(const BlockHandle& h) {
+    index_handle_ = h;
+  }
 
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* input);
+
+  // Encoded length of a Footer.  Note that the serialization of a
+  // Footer will always occupy exactly this many bytes.  It consists
+  // of two block handles and a magic number.
+  enum {
+    kEncodedLength = 2*BlockHandle::kMaxEncodedLength + 8
+  };
 
  private:
   BlockHandle metaindex_handle_;
@@ -86,13 +92,22 @@ struct BlockContents {
 
 // Read the block identified by "handle" from "file".  On failure
 // return non-OK.  On success fill *result and return OK.
-Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
-                 const BlockHandle& handle, BlockContents* result);
+extern Status ReadBlock(RandomAccessFile* file,
+                        const ReadOptions& options,
+                        const BlockHandle& handle,
+                        BlockContents* result);
 
 // Implementation details follow.  Clients should ignore,
 
 inline BlockHandle::BlockHandle()
-    : offset_(~static_cast<uint64_t>(0)), size_(~static_cast<uint64_t>(0)) {}
+    : offset_(~static_cast<uint64_t>(0)),
+      size_(~static_cast<uint64_t>(0)) {
+}
+
+inline BlockHandle::BlockHandle(uint64_t size, uint64_t offset)
+    : offset_(offset),
+      size_(size) {
+}
 
 }  // namespace leveldb
 

@@ -14,13 +14,16 @@
 #include "table/format.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#ifdef PERF_LOG
+#include "util/perf_log.h"
+#endif
 
 namespace leveldb {
 
 struct Table::Rep {
   ~Rep() {
     delete filter;
-    delete[] filter_data;
+    delete [] filter_data;
     delete index_block;
   }
 
@@ -35,8 +38,10 @@ struct Table::Rep {
   Block* index_block;
 };
 
-Status Table::Open(const Options& options, RandomAccessFile* file,
-                   uint64_t size, Table** table) {
+Status Table::Open(const Options& options,
+                   RandomAccessFile* file,
+                   uint64_t size,
+                   Table** table) {
   *table = nullptr;
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
@@ -54,11 +59,13 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
 
   // Read the index block
   BlockContents index_block_contents;
-  ReadOptions opt;
-  if (options.paranoid_checks) {
-    opt.verify_checksums = true;
+  if (s.ok()) {
+    ReadOptions opt;
+    if (options.paranoid_checks) {
+      opt.verify_checksums = true;
+    }
+    s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
   }
-  s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
 
   if (s.ok()) {
     // We've successfully read the footer and the index block: we're
@@ -126,12 +133,14 @@ void Table::ReadFilter(const Slice& filter_handle_value) {
     return;
   }
   if (block.heap_allocated) {
-    rep_->filter_data = block.data.data();  // Will need to delete later
+    rep_->filter_data = block.data.data();     // Will need to delete later
   }
   rep_->filter = new FilterBlockReader(rep_->options.filter_policy, block.data);
 }
 
-Table::~Table() { delete rep_; }
+Table::~Table() {
+  delete rep_;
+}
 
 static void DeleteBlock(void* arg, void* ignored) {
   delete reinterpret_cast<Block*>(arg);
@@ -150,7 +159,8 @@ static void ReleaseBlock(void* arg, void* h) {
 
 // Convert an index iterator value (i.e., an encoded BlockHandle)
 // into an iterator over the contents of the corresponding block.
-Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
+Iterator* Table::BlockReader(void* arg,
+                             const ReadOptions& options,
                              const Slice& index_value) {
   Table* table = reinterpret_cast<Table*>(arg);
   Cache* block_cache = table->rep_->options.block_cache;
@@ -168,7 +178,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
     if (block_cache != nullptr) {
       char cache_key_buffer[16];
       EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
-      EncodeFixed64(cache_key_buffer + 8, handle.offset());
+      EncodeFixed64(cache_key_buffer+8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
       cache_handle = block_cache->Lookup(key);
       if (cache_handle != nullptr) {
@@ -178,8 +188,8 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
         if (s.ok()) {
           block = new Block(contents);
           if (contents.cachable && options.fill_cache) {
-            cache_handle = block_cache->Insert(key, block, block->size(),
-                                               &DeleteCachedBlock);
+            cache_handle = block_cache->Insert(
+                key, block, block->size(), &DeleteCachedBlock);
           }
         }
       }
@@ -205,15 +215,91 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
   return iter;
 }
 
+Iterator* Table::BlockIterator(const ReadOptions& options,
+                               const BlockHandle& handle) {
+  Status s;
+  Cache* block_cache = rep_->options.block_cache;
+  Cache::Handle* cache_handle = NULL;
+  Block* block = NULL;
+  BlockContents contents;
+#ifdef PERF_LOG
+  if (block_cache != NULL) {
+    char cache_key_buffer[16];
+    EncodeFixed64(cache_key_buffer, rep_->cache_id);
+    EncodeFixed64(cache_key_buffer+8, handle.offset());
+    Slice key(cache_key_buffer, sizeof(cache_key_buffer));
+    cache_handle = block_cache->Lookup(key);
+    if (cache_handle != NULL) {
+      block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
+    } else {
+      uint64_t start_micros = benchmark::NowMicros();
+      s = ReadBlock(rep_->file, options, handle, &contents);
+      benchmark::LogMicros(benchmark::BLOCK_READ, benchmark::NowMicros() - start_micros);
+      if (s.ok()) {
+        block = new Block(contents);
+        if (contents.cachable && options.fill_cache) {
+          cache_handle = block_cache->Insert(
+            key, block, block->size(), &DeleteCachedBlock);
+        }
+      }
+    }
+  } else {
+    uint64_t start_micros = benchmark::NowMicros();
+    s = ReadBlock(rep_->file, options, handle, &contents);
+    benchmark::LogMicros(benchmark::BLOCK_READ, benchmark::NowMicros() - start_micros);
+    if (s.ok()) {
+      block = new Block(contents);
+    }
+  }
+#else
+  if (block_cache != NULL) {
+    char cache_key_buffer[16];
+    EncodeFixed64(cache_key_buffer, rep_->cache_id);
+    EncodeFixed64(cache_key_buffer+8, handle.offset());
+    Slice key(cache_key_buffer, sizeof(cache_key_buffer));
+    cache_handle = block_cache->Lookup(key);
+    if (cache_handle != NULL) {
+      block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
+    } else {
+      s = ReadBlock(rep_->file, options, handle, &contents);
+      if (s.ok()) {
+        block = new Block(contents);
+        if (contents.cachable && options.fill_cache) {
+          cache_handle = block_cache->Insert(
+            key, block, block->size(), &DeleteCachedBlock);
+        }
+      }
+    }
+  } else {
+    s = ReadBlock(rep_->file, options, handle, &contents);
+    if (s.ok()) {
+      block = new Block(contents);
+    }
+  }
+#endif
+  Iterator* iter;
+  if (block != NULL) {
+    iter = block->NewIterator(rep_->options.comparator);
+    if (cache_handle == NULL) {
+      iter->RegisterCleanup(&DeleteBlock, block, NULL);
+    } else {
+      iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
+    }
+  } else {
+    iter = NewErrorIterator(s);
+  }
+  return iter;
+}
+
 Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator),
       &Table::BlockReader, const_cast<Table*>(this), options);
 }
 
-Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
-                          void (*handle_result)(void*, const Slice&,
-                                                const Slice&)) {
+Status Table::InternalGet(const ReadOptions& options, const Slice& k,
+                          void* arg,
+                          void (*saver)(void*, const Slice&, const Slice&)) {
   Status s;
   Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
   iiter->Seek(k);
@@ -221,14 +307,15 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
     Slice handle_value = iiter->value();
     FilterBlockReader* filter = rep_->filter;
     BlockHandle handle;
-    if (filter != nullptr && handle.DecodeFrom(&handle_value).ok() &&
+    if (filter != nullptr &&
+        handle.DecodeFrom(&handle_value).ok() &&
         !filter->KeyMayMatch(handle.offset(), k)) {
       // Not found
     } else {
       Iterator* block_iter = BlockReader(this, options, iiter->value());
       block_iter->Seek(k);
       if (block_iter->Valid()) {
-        (*handle_result)(arg, block_iter->key(), block_iter->value());
+        (*saver)(arg, block_iter->key(), block_iter->value());
       }
       s = block_iter->status();
       delete block_iter;
@@ -241,31 +328,5 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
   return s;
 }
 
-uint64_t Table::ApproximateOffsetOf(const Slice& key) const {
-  Iterator* index_iter =
-      rep_->index_block->NewIterator(rep_->options.comparator);
-  index_iter->Seek(key);
-  uint64_t result;
-  if (index_iter->Valid()) {
-    BlockHandle handle;
-    Slice input = index_iter->value();
-    Status s = handle.DecodeFrom(&input);
-    if (s.ok()) {
-      result = handle.offset();
-    } else {
-      // Strange: we can't decode the block handle in the index block.
-      // We'll just return the offset of the metaindex block, which is
-      // close to the whole file size for this case.
-      result = rep_->metaindex_handle.offset();
-    }
-  } else {
-    // key is past the last key in the file.  Approximate the offset
-    // by returning the offset of the metaindex block (which is
-    // right near the end of the file).
-    result = rep_->metaindex_handle.offset();
-  }
-  delete index_iter;
-  return result;
-}
 
 }  // namespace leveldb

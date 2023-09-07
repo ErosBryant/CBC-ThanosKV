@@ -50,6 +50,7 @@ class LEVELDB_EXPORT Table {
   // call one of the Seek methods on the iterator before using it).
   Iterator* NewIterator(const ReadOptions&) const;
 
+  Iterator* BlockIterator(const ReadOptions&, const BlockHandle&);
   // Given a key, return an approximate byte offset in the file where
   // the data for that key begins (or would begin if the key were
   // present in the file).  The returned value is in terms of file
@@ -57,6 +58,7 @@ class LEVELDB_EXPORT Table {
   // E.g., the approximate offset of the last key in the table will
   // be close to the file length.
   uint64_t ApproximateOffsetOf(const Slice& key) const;
+
 
  private:
   friend class TableCache;

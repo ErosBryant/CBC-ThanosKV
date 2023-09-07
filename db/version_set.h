@@ -75,6 +75,7 @@ class Version {
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
              GetStats* stats);
 
+  Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
   // Adds "stats" into the current state.  Returns true if a new
   // compaction may need to be triggered, false otherwise.
   // REQUIRES: lock is held
@@ -190,6 +191,9 @@ class VersionSet {
   // Return the current version.
   Version* current() const { return current_; }
 
+// b+tree
+  const Options* const options() { return options_; }
+  TableCache* cache() { return table_cache_; }
   // Return the current manifest file number
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 

@@ -8,6 +8,10 @@
 #include "leveldb/env.h"
 #include "leveldb/table.h"
 #include "util/coding.h"
+#include "table/format.h"
+#ifdef PERF_LOG
+#include "util/perf_log.h"
+#endif
 
 namespace leveldb {
 
@@ -29,14 +33,18 @@ static void UnrefEntry(void* arg1, void* arg2) {
   cache->Release(h);
 }
 
-TableCache::TableCache(const std::string& dbname, const Options& options,
+TableCache::TableCache(const std::string& dbname,
+                       const Options* options,
                        int entries)
-    : env_(options.env),
+    : env_(options->env),
       dbname_(dbname),
       options_(options),
-      cache_(NewLRUCache(entries)) {}
+      cache_(NewLRUCache(entries)) {
+}
 
-TableCache::~TableCache() { delete cache_; }
+TableCache::~TableCache() {
+  delete cache_;
+}
 
 Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
@@ -56,8 +64,11 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
         s = Status::OK();
       }
     }
+    if (s.ok() && file_size == 0) {
+      s = env_->GetFileSize(fname, &file_size);
+    }
     if (s.ok()) {
-      s = Table::Open(options_, file, file_size, &table);
+      s = Table::Open(*options_, file, file_size, &table);
     }
 
     if (!s.ok()) {
@@ -76,7 +87,8 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
 }
 
 Iterator* TableCache::NewIterator(const ReadOptions& options,
-                                  uint64_t file_number, uint64_t file_size,
+                                  uint64_t file_number,
+                                  uint64_t file_size,
                                   Table** tableptr) {
   if (tableptr != nullptr) {
     *tableptr = nullptr;
@@ -96,17 +108,75 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
   }
   return result;
 }
+Status TableCache::Get(const ReadOptions& options,
+                       const IndexMeta* index,
+                       const Slice& k,
+                       void* arg,
+                       void(*saver)(void*, const Slice&, const Slice&)) {
+  Iterator* block_iter = nullptr;
+  Status s = GetBlockIterator(options, index, &block_iter);
+  assert(s.ok());
+  if (block_iter != nullptr) {
+#ifdef PERF_LOG
+    uint64_t start_micros = benchmark::NowMicros();
+    block_iter->Seek(k);
+    benchmark::LogMicros(benchmark::QUERY_VALUE, benchmark::NowMicros() - start_micros);
+    start_micros = benchmark::NowMicros();
+    assert(block_iter->Valid());
+    if (block_iter->Valid()) {
+      (*saver)(arg, block_iter->key(), block_iter->value());
+    }
+    benchmark::LogMicros(benchmark::VALUE_COPY, benchmark::NowMicros() - start_micros);
+#else
+    block_iter->Seek(k);
+    if (block_iter->Valid()) {
+      (*saver)(arg, block_iter->key(), block_iter->value());
+    }
+#endif
+    s = block_iter->status();
+    delete block_iter;
+  }
+  return s;
+}
 
-Status TableCache::Get(const ReadOptions& options, uint64_t file_number,
-                       uint64_t file_size, const Slice& k, void* arg,
-                       void (*handle_result)(void*, const Slice&,
-                                             const Slice&)) {
+Status TableCache::Get(const ReadOptions& options,
+                       uint64_t file_number,
+                       uint64_t file_size,
+                       const Slice& k,
+                       void* arg,
+                       void (*saver)(void*, const Slice&, const Slice&)) {
+  Cache::Handle* handle = NULL;
+  Status s = FindTable(file_number, file_size, &handle);
+  if (s.ok()) {
+    Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
+    s = t->InternalGet(options, k, arg, saver);
+    cache_->Release(handle);
+  }
+  return s;
+}
+
+
+// [B-tree] Added
+Status TableCache::GetBlockIterator(const ReadOptions& options,
+                                    const IndexMeta* index,
+                                    Iterator** iterator) {
+  Cache::Handle* handle = nullptr;
+  Status s = FindTable(index->file_number, 0, &handle);
+  if (s.ok()) {
+    Table* table = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
+    *iterator = table->BlockIterator(options, BlockHandle(index->size, index->offset));
+    cache_->Release(handle);
+  }
+  return s;
+}
+
+Status TableCache::GetTable(uint64_t file_number, uint64_t file_size, TableHandle* table_handle) {
   Cache::Handle* handle = nullptr;
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
     Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
-    s = t->InternalGet(options, k, arg, handle_result);
-    cache_->Release(handle);
+    table_handle->table_ = t;
+    table_handle->RegisterCleanup(&UnrefEntry, cache_, handle);
   }
   return s;
 }

@@ -4,8 +4,8 @@
 
 #include "db/builder.h"
 
-#include "db/dbformat.h"
 #include "db/filename.h"
+#include "db/dbformat.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
 #include "leveldb/db.h"
@@ -14,8 +14,12 @@
 
 namespace leveldb {
 
-Status BuildTable(const std::string& dbname, Env* env, const Options& options,
-                  TableCache* table_cache, Iterator* iter, FileMetaData* meta) {
+Status BuildTable(const std::string& dbname,
+                  Env* env,
+                  const Options& options,
+                  TableCache* table_cache,
+                  Iterator* iter,
+                  FileMetaData* meta) {
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
@@ -27,17 +31,19 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     if (!s.ok()) {
       return s;
     }
-
-    TableBuilder* builder = new TableBuilder(options, file);
+    TableBuilder* builder = new TableBuilder(options, file, meta->number);
     meta->smallest.DecodeFrom(iter->key());
-    Slice key;
+    Slice prev_key;
+    // [B-tree] Added
     for (; iter->Valid(); iter->Next()) {
-      key = iter->key();
-      builder->Add(key, iter->value());
+      Slice key = iter->key();
+      Slice value = iter->value();
+      if (prev_key.empty() || options.comparator->Compare(ExtractUserKey(prev_key), ExtractUserKey(key)) != 0) {
+        builder->Add(key, value);
+        prev_key = key;
+      }
     }
-    if (!key.empty()) {
-      meta->largest.DecodeFrom(key);
-    }
+    meta->largest.DecodeFrom(prev_key);
 
     // Finish and check for builder errors
     s = builder->Finish();
@@ -46,20 +52,13 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       assert(meta->file_size > 0);
     }
     delete builder;
-
-    // Finish and check for file errors
-    if (s.ok()) {
-      s = file->Sync();
-    }
-    if (s.ok()) {
-      s = file->Close();
-    }
     delete file;
     file = nullptr;
 
     if (s.ok()) {
       // Verify that the table is usable
-      Iterator* it = table_cache->NewIterator(ReadOptions(), meta->number,
+      Iterator* it = table_cache->NewIterator(ReadOptions(),
+                                              meta->number,
                                               meta->file_size);
       s = it->status();
       delete it;
@@ -74,7 +73,7 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
   if (s.ok() && meta->file_size > 0) {
     // Keep it
   } else {
-    env->RemoveFile(fname);
+    env->DeleteFile(fname);
   }
   return s;
 }

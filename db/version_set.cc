@@ -365,6 +365,55 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   }*/
 }
 
+// b+tree get
+Status Version::Get(const ReadOptions& options,
+                    const LookupKey& key,
+                    std::string* val) {
+  Status s;
+  Slice ikey = key.internal_key();
+  Slice user_key = key.user_key();
+  const Comparator* ucmp = vset_->icmp_.user_comparator();
+
+  // [B-tree] Added
+  Index* index = vset_->options()->index;
+
+#ifdef PERF_LOG
+  uint64_t start_micros = benchmark::NowMicros();
+  const IndexMeta* index_meta = index->Get(user_key);
+  benchmark::LogMicros(benchmark::QUERY, benchmark::NowMicros() - start_micros);
+#else
+  const IndexMeta* index_meta = index->Get(user_key);
+#endif
+
+  if (index_meta != nullptr) {
+    Saver saver;
+    saver.state = kNotFound;
+    saver.ucmp = ucmp;
+    saver.user_key = user_key;
+    saver.value = val;
+    // [B-tree] Added
+    s = vset_->cache()->Get(options, index_meta, ikey, &saver, SaveValue);
+    if (!s.ok()) {
+      return s;
+    }
+    switch (saver.state) {
+      case kNotFound:
+        s = Status::NotFound(Slice());
+        return s;
+      case kFound:
+        return s;
+      case kDeleted:
+        s = Status::NotFound(Slice());
+        return s;
+      case kCorrupt:
+        s = Status::Corruption("corrupted key for", user_key);
+        return s;
+    }
+  }
+  return Status::NotFound(Slice());
+}
+
+
 Status Version::Get(const ReadOptions& options, const LookupKey& k,
                     std::string* value, GetStats* stats) {
   stats->seek_file = nullptr;
@@ -730,7 +779,7 @@ class VersionSet::Builder {
     cmp.internal_comparator = &vset_->icmp_;
     DataTable* lasttable;
     for (int level = 0; level < config::kNumLevels; level++) {
-     // printf("level: %d\n", level);
+      //printf("level: %d\n", level);
       // Merge the set of added files with the set of pre-existing files.
       // Drop any deleted files.  Store the result in *v.
       //const std::vector<FileMetaData*>& base_files = base_->files_[level];
@@ -742,7 +791,9 @@ class VersionSet::Builder {
       const FileSet* added_files = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added_files->size());
       lasttable = nullptr;
+      //printf("base_files.size(): %d\n", base_files.size());
       for (; base_iter != base_end; ++base_iter) {
+        //printf("base_iter: %d\n", (*base_iter)->number);
         MaybeAddFile(v, level, *base_iter, true);
 
       }

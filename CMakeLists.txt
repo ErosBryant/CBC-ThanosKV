@@ -22,6 +22,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif(NOT CMAKE_CXX_STANDARD)
 
+
 if (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)
   # TODO(cmumford): Make UNICODE configurable for Windows.
@@ -132,6 +133,20 @@ target_sources(leveldb
     "NVM/mergeablebloom.cc"
     "NVM/global.h"
     "NVM/global.cc"
+# index
+    "index/btree_index.cc"
+    "index/btree_index.h"  
+    "index/ff_btree.h"
+    "index/ff_btree.cc"  
+    "index/ff_btree_iterator.h"
+    "index/ff_btree_iterator.cc"
+    "index/index_iterator.cc"
+    "index/index_iterator.h"
+    "index/index.cc"
+
+    "util/persist.h"
+    "util/persistant_pool.cc"
+
     "db/db_impl.cc"
     "db/db_impl.h"
     "db/db_iter.cc"
@@ -198,6 +213,8 @@ target_sources(leveldb
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    
+    
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -216,6 +233,9 @@ target_sources(leveldb
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/table_builder.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/table.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/write_batch.h"
+    # 추가
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/index.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/persistant_pool.h"
 )
 
 if (WIN32)
@@ -291,6 +311,7 @@ endif(HAVE_TCMALLOC)
 
 # add
 target_link_libraries(leveldb -lnuma)
+target_link_libraries(leveldb -lpmemobj)
 # Needed by port_stdcxx.h
 find_package(Threads REQUIRED)
 target_link_libraries(leveldb Threads::Threads)
@@ -502,6 +523,10 @@ if(LEVELDB_INSTALL)
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/table_builder.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/table.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/write_batch.h"
+      # 추가
+      "${LEVELDB_PUBLIC_INCLUDE_DIR}/index.h"
+      "${LEVELDB_PUBLIC_INCLUDE_DIR}/persistant_pool.h"
+
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/leveldb"
   )
 

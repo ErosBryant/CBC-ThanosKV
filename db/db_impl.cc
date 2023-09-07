@@ -146,13 +146,13 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
                                &internal_filter_policy_, raw_options)),
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
-      //dbname_(raw_options.nvm_option.pmem_path),
+      dbname_(dbname),
       dbname_ssd_(raw_options.nvm_option.sst_path),
-      dbname_(raw_options.nvm_option.pmem_path),
+      //dbname_(raw_options.nvm_option.pmem_path),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
       l0_slow_tall_time_(0),
-      table_cache_(new TableCache(dbname_ssd_, options_, TableCacheSize(options_))),
+      table_cache_(new TableCache(dbname_ssd_,&options_, TableCacheSize(options_))),
       db_lock_(nullptr),
       shutting_down_(false),
       background_work_finished_signal_(&mutex_),
@@ -170,7 +170,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
                                &internal_comparator_)),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-  
+
     for (int i = 0; i < config::kNumLevels; i++) {
     background_compaction_scheduled_[i] = false;
   }
@@ -543,7 +543,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
-  meta.number = versions_->NewFileNumber();
+  meta.number = versions_sst->NewFileNumber();
   pending_outputs_.insert(meta.number);
   Iterator* iter = pt->NewIterator();
 
@@ -551,8 +551,10 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   {
     mutex_.Unlock();
     s = BuildTable(dbname_ssd_, env_, options_, table_cache_, iter, &meta);
+   // s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
+
 
   Log(options_.info_log, "sstable #%llu: %lld bytes %s",
       (unsigned long long)meta.number, (unsigned long long)meta.file_size,
@@ -561,6 +563,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   pending_outputs_.erase(meta.number);
 
   if (s.ok() && meta.file_size > 0) {
+
     edit->AddFile(meta.number, meta.file_size, meta.total, meta.alive,
                   meta.smallest, meta.largest);
   }
@@ -571,8 +574,6 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   stats.micros = env_->NowMicros() - start_micros;
   stats.bytes_written = meta.file_size;
   _stats_.Add(stats);
-
-
 
 
   return s;
@@ -814,22 +815,6 @@ void DBImpl::BackgroundCompaction(int level) {
   CompactionState* compact = new CompactionState(c);
   Status s;
 
-  // if (level > 0 && level < config::kNumLevels){
-    
-  //   //std::cout << "Before compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
-  //   s = DoCompactionWork(compact);
-  //   //std::cout << "After compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
-  //   // ------ 여기까지는 pm compaction
-
-  // }else{
-  //     //  if (level >= config::kNumLevels -1 )
-  //     // compact to ssd
-
-  //       //std::cout << "Before compaction , Single level :"<< _stats_.bytes_written << std::endl;
-  //       s = CompactionToSsd(compact,compact->smallest_snapshot);
-  //       //std::cout << "After compaction, Single level : "<< _stats_.bytes_written << std::endl;
-  //     // 
-  // }
 
   if (level >= config::kNumLevels -1 ){
       // compact to ssd
@@ -903,7 +888,8 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   std::string fname = TableFileName(dbname_, file_number);
   Status s = env_->NewWritableFile(fname, &compact->outfile);
   if (s.ok()) {
-    compact->builder = new TableBuilder(options_, compact->outfile);
+    //compact->builder = new TableBuilder(options_, compact->outfile);
+    compact->builder = new TableBuilder(options_, compact->outfile, file_number);
   }
   return s;
 }

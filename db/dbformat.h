@@ -22,6 +22,25 @@ namespace leveldb {
 // Grouping of constants.  We may want to make some of these
 // parameters set via options.
 namespace config {
+
+//for index
+
+static constexpr char key_format[] = "%020lu";
+
+// Locality check configs
+static constexpr int LocalityMagicNumber = 1;
+
+// Number of iterations for one round during locality check
+static constexpr int LocalityCheckRange = 128000;
+
+// Min number of unique files to mark for merge during locality check
+static constexpr int LocalityMinFileNumber = 10;
+
+// Scan compaction locality check
+static constexpr int ScanCheckMinFileNumber = 8;
+
+
+
 static const int kNumLevels = 4 ;
 
 // Level-0 compaction is started when we hit this many files.

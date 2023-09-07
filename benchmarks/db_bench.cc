@@ -17,6 +17,7 @@
 #include "util/histogram.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
+#include "leveldb/index.h"
 #include "util/testutil.h"
 
 // Comma-separated list of operations to run in the specified order
@@ -715,6 +716,7 @@ class Benchmark {
 	options.dram_node = FLAGS_dram_node;
 	options.nvm_node = FLAGS_nvm_node;
 	options.nvm_next_node = FLAGS_nvm_next_node;
+  options.index = CreateBtreeIndex();
     Status s = DB::Open(options, FLAGS_db, &db_);
     if (!s.ok()) {
       std::fprintf(stderr, "open error: %s\n", s.ToString().c_str());
