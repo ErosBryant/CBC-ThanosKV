@@ -43,7 +43,6 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ## Set nvm version
 
 ```
-source scripts/setvars.sh
 scripts/mount_dax.sh
 ```
 

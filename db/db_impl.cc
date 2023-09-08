@@ -1582,7 +1582,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
   } else if (in == "stats") {
 
   
-  std::cout<<  "--------------------------------------------------"<<std::endl;
+  //std::cout<<  "--------------------------------------------------"<<std::endl;
   std::cout << "\nwrite in SSD size (MB):" <<_stats_.bytes_written/ 1048576.0 << std::endl;
   
   std::cout << "memtable stall time: " <<1.0 * mem_stall_time_ /1000000 << " s" << std::endl;

@@ -1,6 +1,7 @@
 #include "leveldb/persistant_pool.h"
 
 #include <libpmemobj.h>
+#include <cstdio>
 
 namespace leveldb {
 namespace nvram {
@@ -8,18 +9,15 @@ namespace nvram {
 #define LAYOUT_NAME "PMINDEXDB"
 
 static PMEMobjpool* pm_pool;
-static bool init = false;
+static bool init = true;
 static uint64_t allocs = 0;
 
 
 void create_pool(const std::string& dir, const size_t& s) {
-
   size_t size = (s < PMEMOBJ_MIN_POOL) ? PMEMOBJ_MIN_POOL : s;
   printf("Creating NVM pool size of %lu\n", size);
   pm_pool = pmemobj_create(dir.data(), LAYOUT_NAME, size, 0666);
   init = true;
-
-  printf("pmemobj_create\n");
   if (pm_pool == nullptr) {
     fprintf(stderr, "pmem create error\n");
     perror(dir.data());
@@ -30,7 +28,9 @@ void create_pool(const std::string& dir, const size_t& s) {
 void close_pool() {
   if (init) {
     fprintf(stdout, "pmem allocs %lu\n", allocs);
-    pmemobj_close(pm_pool);
+
+   // pmemobj_close(pm_pool);
+    std::remove("/mnt/pmemdir/my_pool");
   }
 }
 
@@ -50,8 +50,13 @@ void* pmalloc(size_t size) {
     ptr = malloc(size);
   } else {
     allocs++;
-    printf("pmalloc\n");
-    PMEMoid oid; if (pmemobj_zalloc(pm_pool, &oid, size, 0) != 0) ptr = nullptr; else ptr = pmemobj_direct(oid); if (ptr == nullptr) {
+    PMEMoid oid; 
+    if (pmemobj_zalloc(pm_pool, &oid, size, 0) != 0) 
+        ptr = nullptr; 
+    else 
+      ptr = pmemobj_direct(oid); 
+    
+    if (ptr == nullptr) {
       fprintf(stderr, "pmem malloc error 2 \n");
       perror("vmem_malloc");
       exit(1);

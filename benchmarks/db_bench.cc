@@ -19,6 +19,7 @@
 #include "util/random.h"
 #include "leveldb/index.h"
 #include "util/testutil.h"
+#include "leveldb/persistant_pool.h"
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -268,10 +269,11 @@ class Stats {
     if (done_ < 1) done_ = 1;
 
     std::string extra;
+    double elapsed = (finish_ - start_) * 1e-6;
     if (bytes_ > 0) {
       // Rate is computed on actual elapsed time, not the sum of per-thread
       // elapsed times.
-      double elapsed = (finish_ - start_) * 1e-6;
+      
       char rate[100];
       std::snprintf(rate, sizeof(rate), "%6.1f MB/s",
                     (bytes_ / 1048576.0) / elapsed);
@@ -279,9 +281,9 @@ class Stats {
     }
     AppendWithSpace(&extra, message_);
 
-    std::fprintf(stdout, "%-12s : %11.3f micros/op;%s%s\n",
+    std::fprintf(stdout, "%-12s : %11.3f micros/op;%s%s %.2f s\n",
                  name.ToString().c_str(), seconds_ * 1e6 / done_,
-                 (extra.empty() ? "" : " "), extra.c_str());
+                 (extra.empty() ? "" : " "), extra.c_str(),elapsed);
     if (FLAGS_histogram) {
       std::fprintf(stdout, "Microseconds per op:\n%s\n",
                    hist_.ToString().c_str());
@@ -711,12 +713,13 @@ class Benchmark {
     options.max_open_files = FLAGS_open_files;
     options.filter_policy = filter_policy_;
     options.reuse_logs = FLAGS_reuse_logs;
-	options.bits_per_key = FLAGS_bits_per_key;
-	options.keys_per_datatable = FLAGS_keys_per_datatable;
-	options.dram_node = FLAGS_dram_node;
-	options.nvm_node = FLAGS_nvm_node;
-	options.nvm_next_node = FLAGS_nvm_next_node;
-  options.index = CreateBtreeIndex();
+    options.bits_per_key = FLAGS_bits_per_key;
+    options.keys_per_datatable = FLAGS_keys_per_datatable;
+    options.dram_node = FLAGS_dram_node;
+    options.nvm_node = FLAGS_nvm_node;
+    options.nvm_next_node = FLAGS_nvm_next_node;
+    options.index = CreateBtreeIndex();
+  
     Status s = DB::Open(options, FLAGS_db, &db_);
     if (!s.ok()) {
       std::fprintf(stderr, "open error: %s\n", s.ToString().c_str());
@@ -749,10 +752,12 @@ class Benchmark {
     int64_t bytes = 0;
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
-      for (int j = 0; j < entries_per_batch_; j++) {
-        const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
-        char key[100];
-        std::snprintf(key, sizeof(key), "%016d", k);
+        for (int j = 0; j < entries_per_batch_; j++) {
+            const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
+           // std::cout << "Value of k: " << k << std::endl;  // Print the value of k
+            char key[100];
+            std::snprintf(key, sizeof(key), "%016d", k);
+
         batch.Put(key, gen.Generate(value_size_));
         bytes += value_size_ + strlen(key);
         thread->stats.FinishedSingleOp();
@@ -1000,13 +1005,7 @@ int main(int argc, char** argv) {
       FLAGS_db = argv[i] + 5;
 	} else if (sscanf(argv[i], "--keys_per_datatable=%d%c", &n, &junk) == 1) {
 	  FLAGS_keys_per_datatable = n;
-	} else if (sscanf(argv[i], "--dram_node=%d%c", &n, &junk) == 1) {
-	  FLAGS_dram_node = n;
-	} else if (sscanf(argv[i], "--nvm_node=%d%c", &n, &junk) == 1) {
-	  FLAGS_nvm_node = n;
-	} else if (sscanf(argv[i], "--nvm_next_node=%d%c", &n, &junk) == 1) {
-	  FLAGS_nvm_next_node = n;
-	} else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
+	}  else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
 	  FLAGS_bits_per_key = n;
     } else {
       std::fprintf(stderr, "Invalid flag '%s'\n", argv[i]);
@@ -1024,7 +1023,11 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
+  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(4) * 1024 * 1024 * 1024);
   leveldb::Benchmark benchmark;
+
   benchmark.Run();
+
+  leveldb::nvram::close_pool();
   return 0;
 }
