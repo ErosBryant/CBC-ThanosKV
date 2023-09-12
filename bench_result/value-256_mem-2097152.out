@@ -1,0 +1,42 @@
+/home/eros/workspace-lsm/Thanoskv2/build/db_bench --num=1000000 --value_size=256 --benchmarks=fillrandom,stats,readrandom,stats --write_buffer_size=2097152 >> /home/eros/workspace-lsm/Thanoskv2/bench_result/value-256_mem-2097152.out
+Default db path: /mnt/pmemdir/-1000/dbbench
+Creating NVM pool size of 4294967296
+Keys:       16 bytes each
+Values:     256 bytes each (128 bytes after compression)
+Entries:    1000000
+RawSize:    259.4 MB (estimated)
+FileSize:   137.3 MB (estimated)
+------------------------------------------------
+Final Use NVM: 0 GB
+Remainder of NVM space : 8.50547 GB
+fillrandom   :       2.052 micros/op;  126.4 MB/s 2.05 s
+
+write in SSD size (MB):97.7713
+memtable stall time: 0 s
+L0 stall time: 0  s
+L0 slow stall time: 0  s
+
+                               Compactions
+Level  Files Size(MB) Time(sec) Read(MB) Write(MB)
+--------------------------------------------------
+  0        1        2         0        0       324
+  1        2        8         0        0        15
+  2       15      120         0        0        15
+
+readrandom   :       1.874 micros/op;  138.4 MB/s (1000000 of 1000000 found) 1.87 s
+
+write in SSD size (MB):155.564
+memtable stall time: 0 s
+L0 stall time: 0  s
+L0 slow stall time: 0  s
+
+                               Compactions
+Level  Files Size(MB) Time(sec) Read(MB) Write(MB)
+--------------------------------------------------
+  0        1        2         0        0       324
+  1        2        8         0        0        15
+  2        2       16         0        0        15
+
+pmem allocs 929478
+Final Use NVM: 0.025393 GB
+Remainder of NVM space : 8.20606 GB

@@ -34,6 +34,7 @@ public:
 
   FFBtreeIterator* BtreeIterator();
 
+  pthread_t getThreadID() const;
 private:
   void Runner();
   static void* ThreadWrapper(void* ptr);

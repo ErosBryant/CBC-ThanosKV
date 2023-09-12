@@ -166,6 +166,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       log_(nullptr),
       seed_(0),
       tmp_batch_(new WriteBatch),
+      b_index_(raw_options.index),
       //background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
       versions_sst(new VersionSet_sst(dbname_ssd_, &options_, table_cache_,
@@ -188,6 +189,7 @@ DBImpl::~DBImpl() {
   mutex_.Lock();
   shutting_down_.store(true, std::memory_order_release);
   
+  //b_index_->Break();
   int counter = 0;
   while (counter != config::kNumLevels) {
     if (background_compaction_scheduled_[counter]) {
@@ -832,7 +834,7 @@ void DBImpl::BackgroundCompaction(int level) {
         //std::cout << "After compaction, Single level : "<< _stats_.bytes_written << std::endl;
       // }
   }else {
- // if (level > 0 && level < config::kNumLevels - 2) {
+  //if (level > 0 && level < config::kNumLevels - 2) {
 
     //std::cout << "Before compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
     s = DoCompactionWork(compact);
@@ -1231,14 +1233,20 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
     list.push_back(imm_->NewIterator());
     imm_->Ref();
   }
+
   versions_->current()->AddIterators(options, &list);
+    // [B-tree] 
+
+  list.push_back(b_index_->NewIterator(options, table_cache_));
+
+  printf("NewInternalIterator\n");
   Iterator* internal_iter =
       NewMergingIterator(&internal_comparator_, &list[0], list.size());
   versions_->current()->Ref();
 
   IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
   internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
-
+  printf("NewInternalIterator\n");
   *seed = ++seed_;
   mutex_.Unlock();
   return internal_iter;
@@ -1294,9 +1302,10 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
       PMtable_hits++;
     } else {
     s = BT_current->Get(options, lkey, value);
-    have_stat_update = true;
-     Btree_hits++;
-    mutex_.Lock();
+   //printf("get");
+      have_stat_update = true;
+      Btree_hits++;
+      mutex_.Lock();
   }
 
   }
@@ -1315,8 +1324,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed);
   return NewDBIterator(this, user_comparator(), iter,
                        (options.snapshot != nullptr
-                            ? static_cast<const SnapshotImpl*>(options.snapshot)
-                                  ->sequence_number()
+                            ? static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number()
                             : latest_snapshot),
                        seed);
 }

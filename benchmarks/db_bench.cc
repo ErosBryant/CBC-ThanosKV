@@ -20,6 +20,7 @@
 #include "leveldb/index.h"
 #include "util/testutil.h"
 #include "leveldb/persistant_pool.h"
+#include "index/btree_index.h"
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -772,17 +773,24 @@ class Benchmark {
   }
 
   void ReadSequential(ThreadState* thread) {
+  
     Iterator* iter = db_->NewIterator(ReadOptions());
     int i = 0;
     int64_t bytes = 0;
+    std::string value;
     for (iter->SeekToFirst(); i < reads_ && iter->Valid(); iter->Next()) {
       bytes += iter->key().size() + iter->value().size();
+      value = iter->value().ToString();
       thread->stats.FinishedSingleOp();
       ++i;
     }
     delete iter;
     thread->stats.AddBytes(bytes);
+    char msg[100];
+    snprintf(msg, sizeof(msg), "(%d of reads)", i);
+    thread->stats.AddMessage(msg);
   }
+
 
   void ReadReverse(ThreadState* thread) {
     Iterator* iter = db_->NewIterator(ReadOptions());
@@ -814,7 +822,7 @@ class Benchmark {
     }
     char msg[100];
     std::snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
-	thread->stats.AddBytes(bytes);
+	  thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
 
@@ -1023,11 +1031,15 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(4) * 1024 * 1024 * 1024);
+  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(8) * 1024 * 1024 * 1024);
   leveldb::Benchmark benchmark;
 
   benchmark.Run();
+  // leveldb::BtreeIndex bi;
 
-  leveldb::nvram::close_pool();
+  std::cout<<"done~~\n"<<std::endl;
+  //leveldb::nvram::close_pool(bi.getThreadID());
+  leveldb::nvram::close_pool(); 
+
   return 0;
 }

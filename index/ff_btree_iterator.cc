@@ -15,6 +15,7 @@ bool FFBtreeIterator::Valid() const {
 void FFBtreeIterator::SeekToFirst() {
   Page* page = (Page*)btree->root;
   while(page->hdr.leftmost_ptr != NULL) {
+    //printf("page->hdr.leftmost_ptr != NULL\n");
     page = page->hdr.leftmost_ptr;
   }
   cur_page = page;

@@ -8,6 +8,9 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <unordered_map>
+#include <util/persist.h>
+#include "dbformat.h"
 
 #include "db/dbformat.h"
 #include "NVM/datatable.h"
@@ -115,6 +118,8 @@ class VersionEdit {
   // void RemoveFile(int level, uint64_t file) {
   //   deleted_files_.insert(std::make_pair(level, file));
   // }
+
+
  void RemoveFile(int level, DataTable* file) {
     deleted_files_.insert(std::make_pair(level, file));
   }
@@ -123,11 +128,12 @@ class VersionEdit {
 
   std::string DebugString() const;
 
+
+
  private:
   friend class VersionSet;
   friend class VersionSet_sst;
 
-  //typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
   typedef std::set<std::pair<int, DataTable*>> DeletedFileSet;
 
   std::string comparator_;
@@ -140,6 +146,7 @@ class VersionEdit {
   bool has_prev_log_number_;
   bool has_next_file_number_;
   bool has_last_sequence_;
+
 
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
   DeletedFileSet deleted_files_;

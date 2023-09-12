@@ -86,6 +86,7 @@ Status IndexIterator::status() const {
 }
 
 void IndexIterator::CacheLookup() {
+  //printf("IndexIterator::CacheLookup() counter %d\n", counter_);
   assert(index_meta_ != nullptr);
   delete block_iterator_;
   status_ = table_cache_->GetBlockIterator(options_, index_meta_, &block_iterator_);
@@ -96,11 +97,34 @@ void IndexIterator::CacheLookup() {
 }
 
 void IndexIterator::Advance() {
+
+  
+
+
   counter_++;
+  // printf("IndexIterator::Advance() counter %d\n", counter_);
+  // assert(index_meta_ != nullptr);
+  // printf("2st IndexIterator::Advance() counter %d\n", counter_);
+
+  // bool isEqualResult = IsEqual(index_meta_, (IndexMeta*)btree_iterator_->value());
+  // printf("index_meta_ %p\n", index_meta_);
+  // printf("btree_iterator_->value() ---- %p\n", btree_iterator_->value());
+  // printf("IsEqual result: %d\n", isEqualResult);
+
+
   if (!IsEqual(index_meta_, (IndexMeta*)btree_iterator_->value())) {
+
+   // printf("IndexIterator::Advance() counter %d\n", counter_);
+    
     index_meta_ = (IndexMeta*) btree_iterator_->value();
+    
+    //printf("index_meta_->file_number %d\n", index_meta_->file_number);
     uniq_files_.insert(index_meta_->file_number);
+
+    //printf("IndexIterator::Advance() uniq_files_.size() %lu\n", uniq_files_.size());
+    //uniq_files_.insert(index_meta_->file_number);
     if (counter_ % cardinality == 0 && uniq_files_.size() > files_to_merge_.size()) {
+      //printf("IndexIterator::Advance() uniq_files_.size()----- %lu\n", uniq_files_.size());
       files_to_merge_.swap(uniq_files_);
       uniq_files_.clear();
     }

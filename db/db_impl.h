@@ -166,7 +166,7 @@ class DBImpl : public DB {
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // nvm
-
+  Index* b_index_;
   Status WriteLeveltoSsTable(DataTable* mem, VersionEdit* edit)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 

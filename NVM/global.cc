@@ -5,7 +5,7 @@
 int nvm_node = 0;
 int nvm_next_node = 0;
 size_t nvm_free_space = 32L * 1024 * 1024 * 1024;
-bool nvm_node_has_changed = false;
+ bool nvm_node_has_changed = false;
 size_t nvm_use = 0L;
 long long nvm_total = 0L;
 long long ops_num = 0L;

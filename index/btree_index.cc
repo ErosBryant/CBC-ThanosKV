@@ -4,12 +4,10 @@
 #include "btree_index.h"
 #include "index_iterator.h"
 #include "table/format.h"
-#include "leveldb/index.h"
 
 namespace leveldb {
 
 BtreeIndex::BtreeIndex() : condvar_(&mutex_) {
-  //printf("btree index\n");
   bgstarted_ = false;
 }
 
@@ -79,6 +77,11 @@ FFBtreeIterator* BtreeIndex::BtreeIterator() {
 void BtreeIndex::Break() {
   pthread_cancel(thread_);
 }
+
+pthread_t BtreeIndex::getThreadID() const {
+    return thread_;
+}
+
 
 
 } // namespace leveldb
