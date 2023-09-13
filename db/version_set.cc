@@ -1257,11 +1257,11 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
       c->inputs_[0].push_back(current_->files_[level][1]);
     } else {
       c->inputs_[0].push_back(current_->files_[level][0]);
-      if (current_->files_[config::kNumLevels - 1].empty()) {
-        c->inputs_[0].push_back(nullptr);
-      } else {
-        c->inputs_[0].push_back(current_->files_[config::kNumLevels - 1][0]);
-      }
+      // if (current_->files_[config::kNumLevels - 1].empty()) {
+      //   c->inputs_[0].push_back(nullptr);
+      // } else {
+      //   c->inputs_[0].push_back(current_->files_[config::kNumLevels - 1][0]);
+      // }
     }
 
   } else {

@@ -197,8 +197,10 @@ class DBImpl : public DB {
   Status DoCompactionWork(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   Status CompactionToSsd(CompactionState* compact)
+       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  Status CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-
+      
 
   Status OpenCompactionOutputFile(CompactionState* compact);
   Status FinishCompactionOutputFile(CompactionState* compact, Iterator* input);

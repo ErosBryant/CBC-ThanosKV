@@ -583,7 +583,7 @@ Status DBImpl::WriteLeveltoSsTable(DataTable* pt, VersionEdit* edit) {
   return s;
 }
 
-
+//memtable -> pmtable
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit) {
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
@@ -813,51 +813,80 @@ void DBImpl::BackgroundCompaction(int level) {
       //std::cout << "After dump, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
     return;
   } 
-  
+
   Compaction* c;
-  c = versions_->PickCompaction(level);
-  CompactionState* compact = new CompactionState(c);
   Status s;
 
+   if (level == config::kNumLevels - 1){
 
-  if (level >= config::kNumLevels -1 ){
-      // compact to ssd
-        
+    while (//(level == config::kNumLevels - 1)&& 
+        versions_->current()->NumFiles(config::kNumLevels-2) > 3 ){
+          printf("-------------%d\n",versions_->current()->NumFiles(config::kNumLevels-2));
+       c = versions_->PickCompaction(level);
+      CompactionState* compact = new CompactionState(c);
+
         if (snapshots_.empty()) {
         compact->smallest_snapshot = versions_->LastSequence();
         } else {
         compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
+       }
+        s = CompactionToSsd(compact);   
+        CleanupCompaction(compact); 
+           if (!s.ok()) {
+          RecordBackgroundError(s);
         }
+ 
+        c->ReleaseInputs();
+        RemoveObsoleteFiles();
+            
+        delete c;
+
+      //}
   
         //std::cout << "Before compaction , Single level :"<< _stats_.bytes_written << std::endl;
-        s = CompactionToSsd(compact);
+
         //std::cout << "After compaction, Single level : "<< _stats_.bytes_written << std::endl;
       // }
-  }else {
+     }
+  } else {
   //if (level > 0 && level < config::kNumLevels - 2) {
 
+      c = versions_->PickCompaction(level);
+      CompactionState* compact = new CompactionState(c);
     //std::cout << "Before compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
     s = DoCompactionWork(compact);
-    //std::cout << "After compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
-    // ------ 여기까지는 pm compaction
-
-  }
-  if (!s.ok()) {
+    CleanupCompaction(compact);
+      if (!s.ok()) {
           RecordBackgroundError(s);
   }
-  CleanupCompaction(compact);
+ 
   c->ReleaseInputs();
   RemoveObsoleteFiles();
       
   delete c;
+    //std::cout << "After compaction, level 0 fileNum: "<< versions_->current()->NumFiles(0) << std::endl;
+    // ------ 여기까지는 pm compaction
 
+  }
+// if (level > 0 && level < config::kNumLevels - 1) {
+//   s = DoCompactionWork(compact);
+// } else {//(level == config::kNumLevels - 1 ) {
+//     if (snapshots_.empty()) {
+//         compact->smallest_snapshot = versions_->LastSequence();
+//     } else {
+//         compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
+//     }
+//     s = CompactionToSsd(compact,compact->smallest_snapshot);
+// }
   if (s.ok()) {
     // Done
   } else if (shutting_down_.load(std::memory_order_acquire)) {
     // Ignore compaction errors found during shutting down
   } else {
     Log(options_.info_log, "Compaction error: %s", s.ToString().c_str());
-  }
+  } 
+
+
 }
 
 
@@ -975,7 +1004,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   // Add compaction outputs
   //compact->compaction->AddInputDeletions(compact->compaction->edit());
   const int level = compact->compaction->level();
-  if (level == config::kNumLevels - 2) {
+  if (level == config::kNumLevels - 1) {
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 0)->dt);
     if (compact->compaction->input(0, 1) != nullptr) {
       compact->compaction->edit()->RemoveFile(level + 1, compact->compaction->input(0, 1)->dt);
@@ -983,7 +1012,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   } else {
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 0)->dt);
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 1)->dt);
-  }
+   }
   
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
@@ -1040,10 +1069,11 @@ Status DBImpl::CompactionToSsd(CompactionState* compact){
 
 
       return s;
+
 }
 
 
-/*
+
 Status DBImpl::CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot){
       Status s;
       VersionEdit edit;
@@ -1060,6 +1090,7 @@ Status DBImpl::CompactionToSsd(CompactionState* compact,uint64_t smallest_snapsh
       DataTable* newdt;
       
       if (newfmd == nullptr) {
+         // printf("newfmd is null\n");
           newdt = new DataTable(internal_comparator_); 
       } else {
           newdt = newfmd->dt;
@@ -1084,7 +1115,10 @@ Status DBImpl::CompactionToSsd(CompactionState* compact,uint64_t smallest_snapsh
       out.file_size = newdt->ApproximateMemoryUsage();
 
       compact->outputs.push_back(out);
+      nvmn_size_delete(out.file_size);
       
+
+
   if (s.ok() && shutting_down_.load(std::memory_order_acquire)) {
     s = Status::IOError("Deleting DB during Pmemtable compaction");
   }
@@ -1100,9 +1134,9 @@ Status DBImpl::CompactionToSsd(CompactionState* compact,uint64_t smallest_snapsh
 
 
       return s;
+
 }
 
-*/
 
 
 
@@ -1129,17 +1163,31 @@ Status DBImpl::DoCompactionWork(CompactionState* compact){
     CompactionState::Output out;
     out.smallest.Clear();
     out.largest.Clear();
+      
+      DataTable *olddt, *newdt;
 
       FileMetaData* oldfmd = compact->compaction->input(0, 0);
+      //printf("oldfmd: %p\n", oldfmd);
       FileMetaData* newfmd = compact->compaction->input(0, 1);
-      DataTable* olddt = oldfmd->dt;
-      DataTable* newdt = newfmd->dt;
+    //  printf("newfmd: %p\n", newfmd);
+      // DataTable* olddt = oldfmd->dt;
+      // DataTable* newdt = newfmd->dt;
+
+      if (oldfmd == nullptr) {
+        olddt = new DataTable(internal_comparator_);
+        out.number = versions_->NewFileNumber();
+      } else {
+        olddt = oldfmd->dt;
+        out.number = oldfmd->number;
+      }
+      newdt = newfmd->dt;
+
 
       //std::cout << "Normal Compaction in level" << level << " start" << std::endl;
       //std::cout << "oldtable: " << olddt << " largestkey: " << olddt->table_.largest[0]->key << std::endl;
       //std::cout << "newtable: " << newdt << " smallestkey: " << newdt->table_.smallest->key << std::endl;
       status = olddt->Compact(newdt, compact->smallest_snapshot);
-      //std::cout << "Normal Compaction complete" << std::endl;
+     //std::cout << "Normal Compaction complete" << std::endl;
 
       out.dt = olddt;
 
@@ -1601,17 +1649,17 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     char buf[200];
     std::snprintf(buf, sizeof(buf),
                   "                               Compactions\n"
-                  "Level  Files Size(MB) Time(sec) Read(MB) Write(MB)\n"
-                  "--------------------------------------------------\n");
+                  "Level  Files Size(MB) \n"
+                  "---------------------\n");
     value->append(buf);
     for (int level = 0; level < config::kNumLevels; level++) {
       int files = versions_->NumLevelFiles(level);
       if (stats_[level].micros > 0 || files > 0) {
-        std::snprintf(buf, sizeof(buf), "%3d %8d %8.0f %9.0f %8.0f %9.0f\n",
-                      level, files, versions_->NumLevelBytes(level) / 1048576.0,
-                      stats_[level].micros / 1e6,
-                      stats_[level].bytes_read / 1048576.0,
-                      stats_[level].bytes_written / 1048576.0);
+        std::snprintf(buf, sizeof(buf), "%3d %8d %8.0f\n",
+                      level, files, versions_->NumLevelBytes(level) / 1048576.0);
+                      //stats_[level].micros / 1e6,
+                      //stats_[level].bytes_read / 1048576.0,
+                      //stats_[level].bytes_written / 1048576.0);
         value->append(buf);
       }
     };
