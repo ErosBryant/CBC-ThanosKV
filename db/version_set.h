@@ -182,6 +182,8 @@ class VersionSet {
   Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
+  Status LogAndApplyForSSD(VersionEdit* edit, port::Mutex* mu)
+      EXCLUSIVE_LOCKS_REQUIRED(mu);
   // Recover the last saved descriptor from persistent storage.
   Status Recover(bool* save_manifest);
 

@@ -641,6 +641,32 @@ class VersionSet::Builder {
     base_->Unref();
   }
 
+
+  void Apply_d(VersionEdit* edit) {
+
+    // Delete files
+    for (const auto& deleted_file_set_kvp : edit->deleted_files_) {
+      const int level = deleted_file_set_kvp.first;
+      levels_[level].deleted_files.insert(deleted_file_set_kvp.second);
+    }
+
+    // Add new files
+    for (size_t i = 0; i < edit->new_files_.size(); i++) {
+      const int level = edit->new_files_[i].first;
+      FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
+      f->refs = 1;
+
+
+      f->allowed_seeks = 30000;
+
+
+      //levels_[level].deleted_files.erase(f->number);
+      levels_[level].deleted_files.erase(f->dt);
+      //levels_[level].added_files->insert(f);
+    }
+  }
+
+
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
 
@@ -772,9 +798,12 @@ void VersionSet::AppendVersion(Version* v) {
   // Append to linked list
   v->prev_ = dummy_versions_.prev_;
   v->next_ = &dummy_versions_;
+
   v->prev_->next_ = v;
   v->next_->prev_ = v;
+
 }
+
 
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (edit->has_log_number_) {
@@ -796,6 +825,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     Builder builder(this, current_);
     builder.Apply(edit);
     builder.SaveTo(v);
+
   }
   Finalize(v);
 
@@ -823,6 +853,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     // Write new record to MANIFEST log
     if (s.ok()) {
       std::string record;
+
       edit->EncodeTo(&record);
       s = descriptor_log_->AddRecord(record);
       if (s.ok()) {
@@ -844,14 +875,17 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
+
     AppendVersion(v);
     /*std::cout << std::endl << "After AppendVersion " << std::endl;
     for (int i = 0; i < current_->files_[0].size(); i++) {
       std::cout << current_->files_[0][i]->dt << std::endl;
     }
     std::cout << std::endl;*/
+
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;
+
   } else {
     delete v;
     if (!new_manifest_file.empty()) {
@@ -860,6 +894,106 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
       descriptor_log_ = nullptr;
       descriptor_file_ = nullptr;
       env_->RemoveFile(new_manifest_file);
+
+    }
+  }
+
+  return s;
+}
+
+
+
+
+Status VersionSet::LogAndApplyForSSD(VersionEdit* edit, port::Mutex* mu) {
+  if (edit->has_log_number_) {
+    assert(edit->log_number_ >= log_number_);
+    assert(edit->log_number_ < next_file_number_);
+  } else {
+    edit->SetLogNumber(log_number_);
+  }
+
+  if (!edit->has_prev_log_number_) {
+    edit->SetPrevLogNumber(prev_log_number_);
+  }
+
+  edit->SetNextFile(next_file_number_);
+  edit->SetLastSequence(last_sequence_);
+
+  Version* v = new Version(this);
+  {
+    Builder builder(this, current_);
+    builder.Apply_d(edit);
+    builder.SaveTo(v);
+
+  }
+  Finalize(v);
+
+  // Initialize new descriptor log file if necessary by creating
+  // a temporary file that contains a snapshot of the current version.
+  std::string new_manifest_file;
+  Status s;
+  if (descriptor_log_ == nullptr) {
+    // No reason to unlock *mu here since we only hit this path in the
+    // first call to LogAndApply (when opening the database).
+    assert(descriptor_file_ == nullptr);
+    new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
+    edit->SetNextFile(next_file_number_);
+    s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
+    if (s.ok()) {
+      descriptor_log_ = new log::Writer(descriptor_file_);
+      s = WriteSnapshot(descriptor_log_);
+    }
+  }
+
+  // Unlock during expensive MANIFEST log write
+  {
+    //mu->Unlock();
+
+    // Write new record to MANIFEST log
+    if (s.ok()) {
+      std::string record;
+
+      edit->EncodeTo(&record);
+      s = descriptor_log_->AddRecord(record);
+      if (s.ok()) {
+        s = descriptor_file_->Sync();
+      }
+      if (!s.ok()) {
+        Log(options_->info_log, "MANIFEST write: %s\n", s.ToString().c_str());
+      }
+    }
+
+    // If we just created a new descriptor file, install it by writing a
+    // new CURRENT file that points to it.
+    if (s.ok() && !new_manifest_file.empty()) {
+      s = SetCurrentFile(env_, dbname_, manifest_file_number_);
+    }
+
+    //mu->Lock();
+  }
+
+  // Install the new version
+  if (s.ok()) {
+
+    AppendVersion(v);
+    /*std::cout << std::endl << "After AppendVersion " << std::endl;
+    for (int i = 0; i < current_->files_[0].size(); i++) {
+      std::cout << current_->files_[0][i]->dt << std::endl;
+    }
+    std::cout << std::endl;*/
+
+    log_number_ = edit->log_number_;
+    prev_log_number_ = edit->prev_log_number_;
+
+  } else {
+    delete v;
+    if (!new_manifest_file.empty()) {
+      delete descriptor_log_;
+      delete descriptor_file_;
+      descriptor_log_ = nullptr;
+      descriptor_file_ = nullptr;
+      env_->RemoveFile(new_manifest_file);
+
     }
   }
 
@@ -1257,6 +1391,8 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
       c->inputs_[0].push_back(current_->files_[level][1]);
     } else {
       c->inputs_[0].push_back(current_->files_[level][0]);
+     // printf("level: %d\n", level);
+      //printf("current_->files_[level].size(): %ld\n", current_->files_[level].size());
       // if (current_->files_[config::kNumLevels - 1].empty()) {
       //   c->inputs_[0].push_back(nullptr);
       // } else {

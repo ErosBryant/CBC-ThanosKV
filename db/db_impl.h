@@ -207,7 +207,7 @@ class DBImpl : public DB {
   Status InstallCompactionResults(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  Status deCompactionResults(CompactionState* compact,DataTable* olddt)
+  Status deCompactionResults(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   const Comparator* user_comparator() const {
@@ -246,8 +246,8 @@ class DBImpl : public DB {
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);
   WriteBatch* tmp_batch_ GUARDED_BY(mutex_);
 
-  SnapshotList snapshots_ GUARDED_BY(mutex_);
 
+  SnapshotList snapshots_ GUARDED_BY(mutex_);
   // Set of table files to protect from deletion because they are
   // part of ongoing compactions.
   std::set<uint64_t> pending_outputs_ GUARDED_BY(mutex_);
