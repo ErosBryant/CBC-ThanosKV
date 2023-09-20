@@ -286,7 +286,6 @@ Status TableBuilder::Finish() {
     r->status = r->file->Close();
   }
   // [B-tree] Added
-  // r-> index 출력해줘 
 
   //printf("TableBuilder::Finish() ---------------------------------index_queue size %lu\n", r->indexx_queue.size());
    r->index->AddQueue(r->indexx_queue);

@@ -9,6 +9,7 @@ namespace leveldb {
 
 BtreeIndex::BtreeIndex() : condvar_(&mutex_) {
   bgstarted_ = false;
+  should_run = true;
 }
 
 IndexMeta* BtreeIndex::Get(const Slice& key) {
@@ -16,9 +17,34 @@ IndexMeta* BtreeIndex::Get(const Slice& key) {
   return result;
 }
 
+// void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
+//   // check btree if updated
+  
+//   IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
+//   if (ptr == nullptr) {
+//     // Handle error, possibly log or throw an exception
+//     return;
+// }
+
+//   ptr->size = meta.size;
+//   ptr->file_number = meta.file_number;
+//   ptr->offset = meta.offset;
+//   clflush((char*)ptr, sizeof(IndexMeta));
+//   IndexMeta* old_ptr = (IndexMeta*) tree_.Insert(key, ptr);
+//   if (old_ptr != nullptr) {
+//     nvram::pfree(old_ptr);
+//   }
+// }
+
 void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
   // check btree if updated
+  
   IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
+  if (ptr == nullptr) {
+    // Handle error, possibly log or throw an exception
+    return;
+  }
+
   ptr->size = meta.size;
   ptr->file_number = meta.file_number;
   ptr->offset = meta.offset;
@@ -29,31 +55,32 @@ void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
   }
 }
 
+
+
+
 void BtreeIndex::Runner() {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-noreturn"
-  for (;;) {
+  while (should_run) {
     mutex_.Lock();
-    for (;queue_.empty();) {
+    while (queue_.empty() && should_run) {
       condvar_.Wait();
     }
-    assert(!queue_.empty());
-    for (;!queue_.empty();) {
+    while (!queue_.empty()) {
       uint64_t key = queue_.front().key;
       std::shared_ptr<IndexMeta> value = queue_.front().meta;
       queue_.pop_front();
       Insert(key, *value);
     }
-    assert(queue_.empty());
     mutex_.Unlock();
   }
-#pragma clang diagnostic pop
 }
 
 void* BtreeIndex::ThreadWrapper(void* ptr) {
   reinterpret_cast<BtreeIndex*>(ptr)->Runner();
   return NULL;
 }
+
+
+
 void BtreeIndex::AddQueue(std::deque<KeyAndMeta>& queue) {
   mutex_.Lock();
   assert(queue_.size() == 0);
@@ -62,9 +89,10 @@ void BtreeIndex::AddQueue(std::deque<KeyAndMeta>& queue) {
     bgstarted_ = true;
     pthread_create(&thread_, NULL, &BtreeIndex::ThreadWrapper, this);
   }
-  condvar_.Signal();
+  condvar_.Signal();  // Signal the runner thread to process tasks
   mutex_.Unlock();
 }
+
 
 Iterator* BtreeIndex::NewIterator(const ReadOptions& options, TableCache* table_cache) {
   return new IndexIterator(options, tree_.GetIterator(), table_cache);
@@ -75,12 +103,19 @@ FFBtreeIterator* BtreeIndex::BtreeIterator() {
 }
 
 void BtreeIndex::Break() {
-  pthread_cancel(thread_);
+
+  mutex_.Lock();
+  should_run = false;
+  condvar_.Signal();
+  mutex_.Unlock();
+  pthread_join(thread_, NULL);
+
 }
 
 pthread_t BtreeIndex::getThreadID() const {
     return thread_;
 }
+
 
 
 

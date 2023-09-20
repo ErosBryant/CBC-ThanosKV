@@ -41,7 +41,7 @@ static constexpr int ScanCheckMinFileNumber = 8;
 
 
 
-static const int kNumLevels = 5 ;
+static const int kNumLevels = 6 ;
 
 // Level-0 compaction is started when we hit this many files.
 static const int kL0_CompactionTrigger = 4;

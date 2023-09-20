@@ -190,7 +190,8 @@ class DBImpl : public DB {
   static void BGWork(void* db, int level);
   void BackgroundCall(int level);
   void BackgroundCompaction(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-
+Status DoCompactionForLevel(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   void CleanupCompaction(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);

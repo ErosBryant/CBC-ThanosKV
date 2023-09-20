@@ -650,21 +650,27 @@ class VersionSet::Builder {
       levels_[level].deleted_files.insert(deleted_file_set_kvp.second);
     }
 
-    // Add new files
-    for (size_t i = 0; i < edit->new_files_.size(); i++) {
-      const int level = edit->new_files_[i].first;
-      FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
-      f->refs = 1;
+  }
 
+  void SaveTo_d(Version* v) {
+    BySmallestKey cmp;
+    cmp.internal_comparator = &vset_->icmp_;
+    DataTable* lasttable;
+    for (int level = 0; level < config::kNumLevels; level++) {
+      //printf("level: %d\n", level);
+      // Merge the set of added files with the set of pre-existing files.
+      // Drop any deleted files.  Store the result in *v.
+      //const std::vector<FileMetaData*>& base_files = base_->files_[level];
+      //std::vector<FileMetaData*>::const_iterator base_iter = base_files.begin();
+      //std::vector<FileMetaData*>::const_iterator base_end = base_files.end();
+      std::vector<FileMetaData*>& base_files = base_->files_[level];
+      std::vector<FileMetaData*>::iterator base_iter = base_files.begin();
+      std::vector<FileMetaData*>::iterator base_end = base_files.end();
+      lasttable = nullptr;
 
-      f->allowed_seeks = 30000;
-
-
-      //levels_[level].deleted_files.erase(f->number);
-      levels_[level].deleted_files.erase(f->dt);
-      //levels_[level].added_files->insert(f);
     }
   }
+
 
 
   // Apply all of the edits in *edit to the current state.
@@ -825,6 +831,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     Builder builder(this, current_);
     builder.Apply(edit);
     builder.SaveTo(v);
+  
+
 
   }
   Finalize(v);
@@ -1374,15 +1382,15 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   return result;
 }*/
 
+
 Compaction* VersionSet::PickCompaction(int arrivallevel) {
   assert(arrivallevel > 0);
   assert(arrivallevel < config::kNumLevels);
   Compaction* c;
-
   int level = arrivallevel - 1;
-  // int level = arrivallevel;
-  
+
   const bool size_compaction = (current_->level_score_[level] >= 1);
+
   if (size_compaction) {
     c = new Compaction(options_, level);
     if (level != config::kNumLevels - 2) {
@@ -1391,13 +1399,11 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
       c->inputs_[0].push_back(current_->files_[level][1]);
     } else {
       c->inputs_[0].push_back(current_->files_[level][0]);
-     // printf("level: %d\n", level);
-      //printf("current_->files_[level].size(): %ld\n", current_->files_[level].size());
-      // if (current_->files_[config::kNumLevels - 1].empty()) {
-      //   c->inputs_[0].push_back(nullptr);
-      // } else {
-      //   c->inputs_[0].push_back(current_->files_[config::kNumLevels - 1][0]);
-      // }
+      if (current_->files_[config::kNumLevels - 2].empty()) {
+        c->inputs_[0].push_back(nullptr);
+      } else {
+        c->inputs_[0].push_back(current_->files_[config::kNumLevels - 2][1]);
+      }
     }
 
   } else {

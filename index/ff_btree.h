@@ -126,7 +126,7 @@ public:
   }
 
   void* operator new(size_t size) {
-    // printf("Page::operator new\n");
+    //printf("Page::operator new\n");
     return nvram::pmalloc(size);
   }
 

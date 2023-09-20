@@ -1032,6 +1032,7 @@ int main(int argc, char** argv) {
   }
 
   leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(8) * 1024 * 1024 * 1024);
+  
   leveldb::Benchmark benchmark;
 
   benchmark.Run();

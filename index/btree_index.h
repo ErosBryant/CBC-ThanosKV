@@ -41,6 +41,7 @@ private:
 
   FFBtree tree_;
   bool bgstarted_;
+  bool should_run;
   pthread_t thread_;
   port::Mutex mutex_;
   port::CondVar condvar_;
