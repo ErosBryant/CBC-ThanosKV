@@ -85,6 +85,7 @@ class DBImpl : public DB {
  private:
   friend class DB;
   struct CompactionState;
+  struct CompactionState_sst;
   struct Writer;
 
   // Information for a manual compaction
@@ -197,19 +198,23 @@ void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   Status DoCompactionWork(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   Status CompactionToSsd(CompactionState* compact)
        EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-  Status CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot)
-      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-      
 
-  Status OpenCompactionOutputFile(CompactionState* compact);
-  Status FinishCompactionOutputFile(CompactionState* compact, Iterator* input);
+
   Status InstallCompactionResults(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  Status deCompactionResults(CompactionState* compact)
+// ====================== sst
+  Status DoCompactionWork_sst(CompactionState_sst* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  void CleanupCompaction_sst(CompactionState_sst* compact)
+      EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ Status FinishCompactionOutputFile(CompactionState_sst* compact, Iterator* input);
+ Status InstallCompactionResults_sst(CompactionState_sst* compact)
+    EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+ Status OpenCompactionOutputFile(CompactionState_sst* compact);
 
   const Comparator* user_comparator() const {
     return internal_comparator_.user_comparator();
@@ -270,7 +275,7 @@ void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   VersionSet* const versions_ GUARDED_BY(mutex_);
   // for read sstable
   VersionSet_sst* const versions_sst GUARDED_BY(mutex_);
-  CompactionStattossd _stats_ GUARDED_BY(mutex_);
+  CompactionStattossd _stats_ [config::kNumLevels] GUARDED_BY(mutex_);
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

@@ -3,18 +3,17 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
 // The representation of a DBImpl consists of a set of Versions.  The
-// newest version is called "current".  Older versions may be kept
+// newest version_sst is called "current".  Older versions may be kept
 // around to provide a consistent view to live iterators.
 //
-// Each Version keeps track of a set of Table files per level.  The
-// entire set of versions is maintained in a VersionSet_sst_sst.
+// Each Version_sst keeps track of a set of Table files per level.  The
+// entire set of versions is maintained in a VersionSet_sst.
 //
-// Version,VersionSet_sst_sst are thread-compatible, but require external
+// Version_sst,VersionSet_sst are thread-compatible, but require external
 // synchronization on all accesses.
 
-
-#ifndef  VERSION_BT_H
-#define  VERSION_BT_H
+#ifndef STORAGE_LEVELDB_DB_VERSION_SET_sst_H_
+#define STORAGE_LEVELDB_DB_VERSION_SET_sst_H_
 
 #include <map>
 #include <set>
@@ -24,7 +23,6 @@
 #include "db/version_edit.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
-#include "db/version_set.h"
 
 namespace leveldb {
 
@@ -40,7 +38,6 @@ class TableCache;
 class Version_sst;
 class VersionSet_sst;
 class WritableFile;
-
 
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
@@ -68,16 +65,15 @@ class Version_sst {
   };
 
   // Append to *iters a sequence of iterators that will
-  // yield the contents of this Version when merged together.
-  // REQUIRES: This version has been saved (see VersionSet_sst::SaveTo)
+  // yield the contents of this Version_sst when merged together.
+  // REQUIRES: This version_sst has been saved (see VersionSet_sst::SaveTo)
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
+ Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
 
-
-  Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
   // Adds "stats" into the current state.  Returns true if a new
   // Compaction_sst may need to be triggered, false otherwise.
   // REQUIRES: lock is held
@@ -114,7 +110,7 @@ class Version_sst {
 
   int NumFiles(int level) const { return files_[level].size(); }
 
-  // Return a human readable string that describes this version's contents.
+  // Return a human readable string that describes this version_sst's contents.
   std::string DebugString() const;
 
  private:
@@ -148,14 +144,13 @@ class Version_sst {
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet_sst* vset_;  // VersionSet_sst to which this Version belongs
-  Version_sst* next_;     // Next version in linked list
-  Version_sst* prev_;     // Previous version in linked list
-  int refs_;          // Number of live refs to this version
+  VersionSet_sst* vset_;  // VersionSet_sst to which this Version_sst belongs
+  Version_sst* next_;     // Next version_sst in linked list
+  Version_sst* prev_;     // Previous version_sst in linked list
+  int refs_;          // Number of live refs to this version_sst
 
   // List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
-  double level_score_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
   FileMetaData* file_to_compact_;
@@ -171,16 +166,15 @@ class Version_sst {
 class VersionSet_sst {
  public:
   VersionSet_sst(const std::string& dbname, const Options* options,
-            TableCache* table_cache,
-             const InternalKeyComparator*);
+             TableCache* table_cache, const InternalKeyComparator*);
   VersionSet_sst(const VersionSet_sst&) = delete;
   VersionSet_sst& operator=(const VersionSet_sst&) = delete;
 
   ~VersionSet_sst();
 
-  // Apply *edit to the current version to form a new descriptor that
+  // Apply *edit to the current version_sst to form a new descriptor that
   // is both saved to persistent state and installed as the new
-  // current version.  Will release *mu while actually writing to the file.
+  // current version_sst.  Will release *mu while actually writing to the file.
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
   Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
@@ -188,13 +182,14 @@ class VersionSet_sst {
 
   // Recover the last saved descriptor from persistent storage.
   Status Recover(bool* save_manifest);
+    // Return table cache
+  TableCache* cache() { return table_cache_; }
 
-  // Return the current version.
+  // Return options config
+  const Options* const options() { return options_; }
+  // Return the current version_sst.
   Version_sst* current() const { return current_; }
 
-// b+tree
-  const Options* const options() { return options_; }
-  TableCache* cache() { return table_cache_; }
   // Return the current manifest file number
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 
@@ -239,8 +234,7 @@ class VersionSet_sst {
   // Returns nullptr if there is no Compaction_sst to be done.
   // Otherwise returns a pointer to a heap-allocated object that
   // describes the Compaction_sst.  Caller should delete the result.
-
-  Compaction_sst* PickCompaction(int arrivallevel);
+  Compaction_sst* PickCompaction();
 
   // Return a Compaction_sst object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -260,21 +254,15 @@ class VersionSet_sst {
   // Returns true iff some level needs a Compaction_sst.
   bool NeedsCompaction() const {
     Version_sst* v = current_;
-    return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
+    return (v->compaction_score_ >= 1);
   }
 
-  bool NeedsCompaction(int arrivallevel) const {
-    assert(arrivallevel > 0 && arrivallevel < config::kNumLevels);
-    Version_sst* v = current_;
-    return (v->level_score_[arrivallevel - 1] >= 1)/* || (v->file_to_compact_ != nullptr)*/;
-  }
-  
-  // Add all files listed in any live version to *live.
+  // Add all files listed in any live version_sst to *live.
   // May also mutate some internal state.
   void AddLiveFiles(std::set<uint64_t>* live);
 
   // Return the approximate offset in the database of the data for
-  // "key" as of version "v".
+  // "key" as of version_sst "v".
   uint64_t ApproximateOffsetOf(Version_sst* v, const InternalKey& key);
 
   // Return a human-readable short (single-line) summary of the number
@@ -330,11 +318,10 @@ class VersionSet_sst {
   std::string compact_pointer_[config::kNumLevels];
 };
 
-//cmpaction encapsulates information about a Compaction_sst.
+// A Compaction_sst encapsulates information about a Compaction_sst.
 class Compaction_sst {
  public:
   ~Compaction_sst();
-  
 
   // Return the level that is being compacted.  Inputs from "level"
   // and "level+1" will be merged to produce a set of "level+1" files.
@@ -346,6 +333,8 @@ class Compaction_sst {
 
   // "which" must be either 0 or 1
   int num_input_files(int which) const { return inputs_[which].size(); }
+
+    bool IsInput(uint64_t num);
 
   // Return the ith input file at "level()+which" ("which" must be 0 or 1).
   FileMetaData* input(int which, int i) const { return inputs_[which][i]; }
@@ -369,15 +358,15 @@ class Compaction_sst {
   // before processing "internal_key".
   bool ShouldStopBefore(const Slice& internal_key);
 
-  // Release the input version for the Compaction_sst, once the Compaction_sst
+  // Release the input version_sst for the Compaction_sst, once the Compaction_sst
   // is successful.
   void ReleaseInputs();
 
  private:
   friend class Version_sst;
   friend class VersionSet_sst;
-  
- Compaction_sst(const Options* options, int level);
+
+  Compaction_sst(const Options* options, int level);
 
   int level_;
   uint64_t max_output_file_size_;
@@ -406,8 +395,4 @@ class Compaction_sst {
 
 }  // namespace leveldb
 
-
-
-  // namespace leveldb
-
-#endif // VERSION_BT_H
+#endif  // STORAGE_LEVELDB_DB_VERSION_SET_sst_H_

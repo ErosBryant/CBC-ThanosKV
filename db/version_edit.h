@@ -114,14 +114,13 @@ class VersionEdit {
     new_files_.push_back(std::make_pair(level, f));
   }
 
-  // Delete the specified "file" from the specified "level".
-  // void RemoveFile(int level, uint64_t file) {
-  //   deleted_files_.insert(std::make_pair(level, file));
-  // }
-
 
  void RemoveFile(int level, DataTable* file) {
     deleted_files_.insert(std::make_pair(level, file));
+  }
+  
+  void DeleteFile(int level, uint64_t file) {
+    deleted_files_sst.insert(std::make_pair(level, file));
   }
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(const Slice& src);
@@ -135,6 +134,7 @@ class VersionEdit {
   friend class VersionSet_sst;
 
   typedef std::set<std::pair<int, DataTable*>> DeletedFileSet;
+  typedef std::set<std::pair<int, uint64_t> > DeletedFileSet_SST;
 
   std::string comparator_;
   uint64_t log_number_;
@@ -150,6 +150,7 @@ class VersionEdit {
 
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
   DeletedFileSet deleted_files_;
+  DeletedFileSet_SST deleted_files_sst;
   std::vector<std::pair<int, FileMetaData>> new_files_;
   std::vector<FileMetaData> _new_files_;
 };

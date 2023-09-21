@@ -17,34 +17,13 @@ IndexMeta* BtreeIndex::Get(const Slice& key) {
   return result;
 }
 
-// void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
-//   // check btree if updated
-  
-//   IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
-//   if (ptr == nullptr) {
-//     // Handle error, possibly log or throw an exception
-//     return;
-// }
-
-//   ptr->size = meta.size;
-//   ptr->file_number = meta.file_number;
-//   ptr->offset = meta.offset;
-//   clflush((char*)ptr, sizeof(IndexMeta));
-//   IndexMeta* old_ptr = (IndexMeta*) tree_.Insert(key, ptr);
-//   if (old_ptr != nullptr) {
-//     nvram::pfree(old_ptr);
-//   }
-// }
-
 void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
   // check btree if updated
-  
-  IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
-  if (ptr == nullptr) {
-    // Handle error, possibly log or throw an exception
-    return;
-  }
 
+IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
+if (ptr == nullptr) {
+    return; // Or appropriate error handling
+}
   ptr->size = meta.size;
   ptr->file_number = meta.file_number;
   ptr->offset = meta.offset;
@@ -54,8 +33,6 @@ void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
     nvram::pfree(old_ptr);
   }
 }
-
-
 
 
 void BtreeIndex::Runner() {
