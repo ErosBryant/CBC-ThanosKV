@@ -1,0 +1,22 @@
+Keys:       16 bytes each
+Values:     1024 bytes each (512 bytes after compression)
+Entries:    20971520
+RawSize:    20800.0 MB (estimated)
+FileSize:   10560.0 MB (estimated)
+WARNING: Optimization is disabled: benchmarks unnecessarily slow
+WARNING: Assertions are enabled; benchmarks unnecessarily slow
+WARNING: Snappy compression is not enabled
+------------------------------------------------
+fillrandom   :      52.399 micros/op;   18.9 MB/s
+readrandom   :      20.239 micros/op; (13222247 of 20971520 found)
+
+                               Compactions
+Level  Files Size(MB) Time(sec) Read(MB) Write(MB)
+--------------------------------------------------
+  0        0        0        83        0     20981
+  1        0        0       124    21777     21468
+  2        0        0       125    22485     22354
+  3        3        0       445    78663     76858
+  4     5255     9971       332    56963     51889
+  5     1771     3363        28     3992      3664
+

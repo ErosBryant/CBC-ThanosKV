@@ -60,6 +60,7 @@ class DBImpl : public DB {
   void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) override;
   void CompactRange(const Slice* begin, const Slice* end) override;
 
+  bool HaveBalancedDistribution();
   // Extra methods (for testing) that are not in the public DB interface
 
   // Compact any files in the named level that overlap [*begin,*end]
@@ -156,6 +157,7 @@ class DBImpl : public DB {
 
   // Delete any unneeded files and stale in-memory entries.
   void RemoveObsoleteFiles() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  void deleteObsoleteFiles() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Compact the in-memory write buffer to disk.  Switches to a new
   // log-file/memtable and writes a new descriptor iff successful.
@@ -191,15 +193,19 @@ class DBImpl : public DB {
   static void BGWork(void* db, int level);
   void BackgroundCall(int level);
   void BackgroundCompaction(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
 Status DoCompactionForLevel(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+Status Compactpmtable(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+
 void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   void CleanupCompaction(CompactionState* compact)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-  Status DoCompactionWork(CompactionState* compact)
+  Status DoCompactionWork(CompactionState* compact,uint64_t smallest_snapshot)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  Status CompactionToSsd(CompactionState* compact)
+  Status CompactionToSsd(CompactionState* compact,uint64_t smallest_snapshot)
        EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
 
@@ -227,8 +233,8 @@ void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   const Options options_;  // options_.comparator == &internal_comparator_
   const bool owns_info_log_;
   const bool owns_cache_;
-  const std::string dbname_;
-  const std::string dbname_ssd_;
+  const std::string dbname_= "/mnt/pmemdir";
+  const std::string dbname_ssd_= "/media/eros/new1/thanos";
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;

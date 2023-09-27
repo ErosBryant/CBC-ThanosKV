@@ -150,7 +150,7 @@ class Version_sst {
   int refs_;          // Number of live refs to this version_sst
 
   // List of files per level
-  std::vector<FileMetaData*> files_[config::kNumLevels];
+  std::vector<FileMetaData*> files_[config::kNumLevels_sst];
 
   // Next file to compact based on seek stats.
   FileMetaData* file_to_compact_;
@@ -254,7 +254,10 @@ class VersionSet_sst {
   // Returns true iff some level needs a Compaction_sst.
   bool NeedsCompaction() const {
     Version_sst* v = current_;
-    return (v->compaction_score_ >= 1);
+    if (v->compaction_score_ >= 1){
+      return 1;
+    }
+   return 0;
   }
 
   // Add all files listed in any live version_sst to *live.
@@ -315,7 +318,7 @@ class VersionSet_sst {
 
   // Per-level key at which the next Compaction_sst at that level should start.
   // Either an empty string, or a valid InternalKey.
-  std::string compact_pointer_[config::kNumLevels];
+  std::string compact_pointer_[config::kNumLevels_sst];
 };
 
 // A Compaction_sst encapsulates information about a Compaction_sst.
@@ -390,7 +393,7 @@ class Compaction_sst {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this Compaction_sst (i.e. for
   // all L >= level_ + 2).
-  size_t level_ptrs_[config::kNumLevels];
+  size_t level_ptrs_[config::kNumLevels_sst];
 };
 
 }  // namespace leveldb

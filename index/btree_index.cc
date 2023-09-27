@@ -9,7 +9,6 @@ namespace leveldb {
 
 BtreeIndex::BtreeIndex() : condvar_(&mutex_) {
   bgstarted_ = false;
-  should_run = true;
 }
 
 IndexMeta* BtreeIndex::Get(const Slice& key) {
@@ -19,11 +18,10 @@ IndexMeta* BtreeIndex::Get(const Slice& key) {
 
 void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
   // check btree if updated
-
-IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
-if (ptr == nullptr) {
-    return; // Or appropriate error handling
-}
+  IndexMeta* ptr = (IndexMeta*) nvram::pmalloc(sizeof(IndexMeta));
+  if (ptr == nullptr) {
+    exit(1);
+  }
   ptr->size = meta.size;
   ptr->file_number = meta.file_number;
   ptr->offset = meta.offset;
@@ -34,42 +32,45 @@ if (ptr == nullptr) {
   }
 }
 
-
 void BtreeIndex::Runner() {
-  while (should_run) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
+  for (;;) {
     mutex_.Lock();
-    while (queue_.empty() && should_run) {
+    for (;queue_.empty();) {
       condvar_.Wait();
     }
-    while (!queue_.empty()) {
+    assert(!queue_.empty());
+    for (;!queue_.empty();) {
       uint64_t key = queue_.front().key;
       std::shared_ptr<IndexMeta> value = queue_.front().meta;
       queue_.pop_front();
       Insert(key, *value);
     }
+    assert(queue_.empty());
     mutex_.Unlock();
   }
+#pragma clang diagnostic pop
 }
 
 void* BtreeIndex::ThreadWrapper(void* ptr) {
   reinterpret_cast<BtreeIndex*>(ptr)->Runner();
   return NULL;
 }
-
-
-
 void BtreeIndex::AddQueue(std::deque<KeyAndMeta>& queue) {
   mutex_.Lock();
+  printf("sssssssss\n");  
   assert(queue_.size() == 0);
+  printf("sssssssss2222\n");  
   queue_.swap(queue);
   if (!bgstarted_) {
     bgstarted_ = true;
-    pthread_create(&thread_, NULL, &BtreeIndex::ThreadWrapper, this);
+    printf("sssssssss333\n");     
+     pthread_create(&thread_, NULL, &BtreeIndex::ThreadWrapper, this);
   }
-  condvar_.Signal();  // Signal the runner thread to process tasks
+  condvar_.Signal();
   mutex_.Unlock();
 }
-
 
 Iterator* BtreeIndex::NewIterator(const ReadOptions& options, TableCache* table_cache) {
   return new IndexIterator(options, tree_.GetIterator(), table_cache);
@@ -80,20 +81,8 @@ FFBtreeIterator* BtreeIndex::BtreeIterator() {
 }
 
 void BtreeIndex::Break() {
-
-  mutex_.Lock();
-  should_run = false;
-  condvar_.Signal();
-  mutex_.Unlock();
-  pthread_join(thread_, NULL);
-
+  pthread_cancel(thread_);
 }
-
-pthread_t BtreeIndex::getThreadID() const {
-    return thread_;
-}
-
-
 
 
 } // namespace leveldb

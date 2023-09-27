@@ -6,7 +6,7 @@
 #include <stdexcept>
 
 #include <cstdio>
-#include <NVM/nvm_option.h>
+#include <leveldb/nvm_option.h>
 
 namespace leveldb {
 namespace nvram {
@@ -30,7 +30,7 @@ void create_pool(const std::string& dir, const size_t& size) {
     pm_pool = pmemobj_open(dir.data(), LAYOUT_NAME);
 
     if (pm_pool == nullptr) {
-       // printf("Pool not found. Creating NVM pool with size of %lu\n", size);
+    
         pm_pool = pmemobj_create(dir.data(), LAYOUT_NAME, size, 0666);
         
         if (pm_pool == nullptr) {
@@ -44,7 +44,7 @@ void create_pool(const std::string& dir, const size_t& size) {
 }
 
 void close_pool() {
-    fprintf(stdout, "pmem allocs %lu\\n", allocs);
+   // fprintf(stdout, "pmem allocs %lu\\n", allocs);
     pmemobj_close(pm_pool);
 }
 

@@ -1,0 +1,36 @@
+Attempting to open NVM pool
+NVM pool opened successfully
+Keys:       16 bytes each
+Values:     1024 bytes each (512 bytes after compression)
+Entries:    20971520
+RawSize:    20800.0 MB (estimated)
+FileSize:   10560.0 MB (estimated)
+------------------------------------------------
+Final Use NVM: 0 GB
+Remainder of NVM space : 1.53924 GB
+fillrandom   :       2.252 micros/op;  440.4 MB/s 47.23 s
+readrandom   :       4.034 micros/op;  245.9 MB/s (20971520 of 20971520 found) 84.60 s
+wait for background Compaction
+memtable stall time: 0 s
+L0 stall time: 0  s
+L0 slow stall time: 0  s
+
+write in SSD size (MB):8460.37
+
+write in SSD size (MB):1367.74
+
+write in SSD size (MB):0
+
+write in SSD size (MB):0
+
+           Compactions
+Level  Files Size(MB) 
+---------------------
+  0        2      128
+  1        3      384
+  2        3      768
+  3        2     1024
+
+done~~
+
+pmem allocs 27533390\nFinal Use NVM: 2.25003 GB

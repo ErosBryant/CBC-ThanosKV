@@ -1,0 +1,29 @@
+Default db path: /mnt/pmemdir/1000/dbbench
+Attempting to open NVM pool
+Keys:       16 bytes each
+Values:     1024 bytes each (512 bytes after compression)
+Entries:    20971520
+RawSize:    20800.0 MB (estimated)
+FileSize:   10560.0 MB (estimated)
+------------------------------------------------
+Final Use NVM: 0 GB
+Remainder of NVM space : 2.40314 GB
+fillrandom   :      40.404 micros/op;   24.5 MB/s 847.33 s
+readrandom   :       3.281 micros/op;  301.8 MB/s (20941829 of 20971520 found) 68.81 s
+wait for background Compaction
+memtable stall time: 765.167 s
+L0 stall time: 0  s
+L0 slow stall time: 0  s
+
+write in SSD size (MB):8034.03
+
+write in SSD size (MB):2779.06
+
+           Compactions
+Level  Files Size(MB) 
+---------------------
+  0        2      128
+  1        3      384
+
+done~~
+

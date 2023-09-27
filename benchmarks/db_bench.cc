@@ -1031,16 +1031,14 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(8) * 1024 * 1024 * 1024);
-  
+  leveldb::nvram::create_pool("/mnt/pmemdir/bench/my_pool", static_cast<size_t>(6) * 1024 * 1024 * 1024);
+
   leveldb::Benchmark benchmark;
 
   benchmark.Run();
   // leveldb::BtreeIndex bi;
 
   std::cout<<"done~~\n"<<std::endl;
-  //leveldb::nvram::close_pool(bi.getThreadID());
-  leveldb::nvram::close_pool(); 
-
+  leveldb::nvram::close_pool();
   return 0;
 }

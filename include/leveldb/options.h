@@ -8,7 +8,7 @@
 #include <cstddef>
 
 #include "leveldb/export.h"
-#include "NVM/nvm_option.h"
+#include "leveldb/nvm_option.h"
 #include "leveldb/index.h"
 
 namespace leveldb {

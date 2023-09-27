@@ -45,7 +45,8 @@ struct LEVELDB_EXPORT Range {
 // any external synchronization.
 class LEVELDB_EXPORT DB {
  public:
-  // Open the database with the specified "name".
+   virtual bool HaveBalancedDistribution() = 0;
+	 // Open the database with the specified "name".
   // Stores a pointer to a heap-allocated database in *dbptr and returns
   // OK on success.
   // Stores nullptr in *dbptr and returns a non-OK status on error.

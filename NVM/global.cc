@@ -40,5 +40,5 @@ void NvmNodeSizeRecord(size_t s) {
 
 void NvmUsagePrint() {
     std::cout << "Final Use NVM: " << 1.0 * nvm_use / 1024 / 1024 / 1024 << " GB" << std::endl;
-    std::cout << "Remainder of NVM space : " << 1.0 * nvm_free_space / 1024 / 1024 / 1024 << " GB" << std::endl;
+    //std::cout << "Remainder of NVM space : " << 1.0 * nvm_free_space / 1024 / 1024 / 1024 << " GB" << std::endl;
 }

@@ -672,13 +672,12 @@ class VersionSet::Builder {
   }
 
 
-
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
 
-    // Delete files
     for (const auto& deleted_file_set_kvp : edit->deleted_files_) {
       const int level = deleted_file_set_kvp.first;
+
       levels_[level].deleted_files.insert(deleted_file_set_kvp.second);
     }
 
@@ -688,26 +687,9 @@ class VersionSet::Builder {
       FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
       f->refs = 1;
 
-      // We arrange to automatically compact this file after
-      // a certain number of seeks.  Let's assume:
-      //   (1) One seek costs 10ms
-      //   (2) Writing or reading 1MB costs 10ms (100MB/s)
-      //   (3) A compaction of 1MB does 25MB of IO:
-      //         1MB read from this level
-      //         10-12MB read from next level (boundaries may be misaligned)
-      //         10-12MB written to next level
-      // This implies that 25 seeks cost the same as the compaction
-      // of 1MB of data.  I.e., one seek costs approximately the
-      // same as the compaction of 40KB of data.  We are a little
-      // conservative and allow approximately one seek for every 16KB
-      // of data before triggering a compaction.
-
-      /* 
-      f->allowed_seeks = static_cast<int>((f->file_size / 16384U));
-      if (f->allowed_seeks < 100) f->allowed_seeks = 100;*/
       f->allowed_seeks = 30000;
 
-
+      // modify by mio
       //levels_[level].deleted_files.erase(f->number);
       //levels_[level].deleted_files.erase(f->dt);
       levels_[level].added_files->insert(f);
@@ -1018,6 +1000,7 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
+  printf("dbname_: %s\n", dbname_.c_str());
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     printf("current: %s\n", current.c_str());
@@ -1113,9 +1096,12 @@ Status VersionSet::Recover(bool* save_manifest) {
     MarkFileNumberUsed(log_number);
   }
 
+  printf("next_file: %d\n", next_file);
   if (s.ok()) {
+    printf("next_file: %d\n", next_file);
     Version* v = new Version(this);
     builder.SaveTo(v);
+    printf("v->files_[0].size(): %d\n", v->files_[0].size());
     // Install recovered version
     Finalize(v);
     AppendVersion(v);
@@ -1125,8 +1111,8 @@ Status VersionSet::Recover(bool* save_manifest) {
     log_number_ = log_number;
     prev_log_number_ = prev_log_number;
 
-    // See if we can reuse the existing MANIFEST file.
     if (ReuseManifest(dscname, current)) {
+    // See if we can reuse the existing MANIFEST file.
       // No need to save new manifest
     } else {
       *save_manifest = true;
