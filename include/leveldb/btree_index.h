@@ -10,7 +10,7 @@
 #include "leveldb/options.h"
 #include "leveldb/index.h"
 #include "db/version_edit.h"
-#include "index/ff_btree.h"
+#include "leveldb/ff_btree.h"
 #include "port/port.h"
 #include "db/table_cache.h"
 

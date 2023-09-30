@@ -287,9 +287,9 @@ Status TableBuilder::Finish() {
   }
   // [B-tree] Added
 
-  printf("TableBuilder::Finish() ---------------------------------index_queue size %lu\n", r->indexx_queue.size());
+  
    r->index->AddQueue(r->indexx_queue);
-  printf("TableBuilder::Finish() index_queue size %lu\n", r->indexx_queue.size());
+
   assert(r->indexx_queue.empty());
   return r->status;
 }

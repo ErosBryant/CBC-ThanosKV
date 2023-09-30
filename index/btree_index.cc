@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include "util/coding.h"
 #include "leveldb/slice.h"
-#include "btree_index.h"
-#include "index_iterator.h"
+#include "leveldb/btree_index.h"
+#include "leveldb/index_iterator.h"
 #include "table/format.h"
 
 namespace leveldb {
@@ -59,13 +59,13 @@ void* BtreeIndex::ThreadWrapper(void* ptr) {
 }
 void BtreeIndex::AddQueue(std::deque<KeyAndMeta>& queue) {
   mutex_.Lock();
-  printf("sssssssss\n");  
+
   assert(queue_.size() == 0);
-  printf("sssssssss2222\n");  
+
   queue_.swap(queue);
   if (!bgstarted_) {
     bgstarted_ = true;
-    printf("sssssssss333\n");     
+
      pthread_create(&thread_, NULL, &BtreeIndex::ThreadWrapper, this);
   }
   condvar_.Signal();

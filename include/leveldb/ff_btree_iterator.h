@@ -1,7 +1,7 @@
 #ifndef STORAGE_LEVELDB_INDEX_FF_BTREE_ITERATOR_H_
 #define STORAGE_LEVELDB_INDEX_FF_BTREE_ITERATOR_H_
 
-#include "ff_btree.h"
+#include "leveldb/ff_btree.h"
 
 namespace leveldb {
 

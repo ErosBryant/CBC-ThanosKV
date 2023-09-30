@@ -4,7 +4,7 @@
 
 #include "util/arena.h"
 #include "string.h"
-#include "NVM/global.h"
+#include "leveldb/global.h"
 
 namespace leveldb {
 

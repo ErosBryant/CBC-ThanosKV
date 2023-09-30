@@ -1,7 +1,7 @@
 
 // Mergeable bloom filters can accelerate datatables' query requests
 
-#include "NVM/mergeablebloom.h"
+#include "leveldb/mergeablebloom.h"
 
 namespace leveldb {
 

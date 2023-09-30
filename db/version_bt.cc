@@ -333,7 +333,6 @@ Status Version_sst::Get(const ReadOptions& options,
   const IndexMeta* index_meta = index->Get(user_key);
 
 
-
   if (index_meta != nullptr) {
     Saver saver;
     saver.state = kNotFound;
@@ -361,6 +360,8 @@ Status Version_sst::Get(const ReadOptions& options,
   }
   return Status::NotFound(Slice());
 }
+
+
 
 
 bool Version_sst::UpdateStats(const GetStats& stats) {

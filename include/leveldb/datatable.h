@@ -11,7 +11,7 @@
 #include "util/arena.h"
 #include "db/memtable.h"
 #include "leveldb/options.h"
-#include "NVM/mergeablebloom.h"
+#include "leveldb/mergeablebloom.h"
 
 namespace leveldb {
 

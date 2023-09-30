@@ -129,21 +129,17 @@ target_sources(leveldb
     "db/builder.h"
     # "db/c.cc"
 # add 
-    "NVM/datatable.h"
+
     "NVM/datatable.cc"
-    "NVM/mergeablebloom.h"
     "NVM/mergeablebloom.cc"
-    "NVM/global.h"
     "NVM/global.cc"
 # index
+
+
     "index/btree_index.cc"
-    "index/btree_index.h"  
-    "index/ff_btree.h"
     "index/ff_btree.cc"  
-    "index/ff_btree_iterator.h"
     "index/ff_btree_iterator.cc"
     "index/index_iterator.cc"
-    "index/index_iterator.h"
     "index/index.cc"
 
     "util/persist.h"
@@ -242,6 +238,14 @@ target_sources(leveldb
     # 추가
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/index.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/persistant_pool.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/mergeablebloom.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/global.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/mergeablebloom.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/btree_index.h"  
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/ff_btree.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/index_iterator.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/ff_btree_iterator.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/datatable.h"
 )
 
 if (WIN32)

@@ -1,13 +1,13 @@
 
 // Use datatable to replace sstable in NVM
 
-#include "NVM/datatable.h"
+#include "leveldb/datatable.h"
 #include "db/dbformat.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
 #include "util/coding.h"
-#include "NVM/global.h"
+#include "leveldb/global.h"
 
 namespace leveldb {
 

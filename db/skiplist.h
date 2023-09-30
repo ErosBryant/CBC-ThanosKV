@@ -37,9 +37,9 @@
 #include "util/random.h"
 #include "db/dbformat.h"
 #include "leveldb/options.h"
-#include "NVM/mergeablebloom.h"
+#include "leveldb/mergeablebloom.h"
 #include "sys/time.h"
-#include "NVM/global.h"
+#include "leveldb/global.h"
 
 namespace leveldb {
 

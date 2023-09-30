@@ -20,7 +20,7 @@
 #include "leveldb/index.h"
 #include "util/testutil.h"
 #include "leveldb/persistant_pool.h"
-#include "index/btree_index.h"
+#include "leveldb/btree_index.h"
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -1031,7 +1031,7 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/bench/my_pool", static_cast<size_t>(6) * 1024 * 1024 * 1024);
+  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(6) * 1024 * 1024 * 1024);
 
   leveldb::Benchmark benchmark;
 

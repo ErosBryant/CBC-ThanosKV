@@ -20,7 +20,7 @@
 #include "port/thread_annotations.h"
 
 
-#include "NVM/datatable.h"
+#include "leveldb/datatable.h"
 namespace leveldb {
 
 class MemTable;

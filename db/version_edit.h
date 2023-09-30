@@ -13,7 +13,7 @@
 #include "dbformat.h"
 
 #include "db/dbformat.h"
-#include "NVM/datatable.h"
+#include "leveldb/datatable.h"
 
 namespace leveldb {
 

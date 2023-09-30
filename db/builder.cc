@@ -45,7 +45,7 @@ Status BuildTable(const std::string& dbname,
     }
     meta->largest.DecodeFrom(prev_key);
 
-    // Finish and check for builder errors
+
     s = builder->Finish();
     if (s.ok()) {
       meta->file_size = builder->FileSize();

@@ -19,7 +19,7 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
-#include "NVM/datatable.h"
+#include "leveldb/datatable.h"
 
 namespace leveldb {
 

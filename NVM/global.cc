@@ -1,4 +1,4 @@
-#include "NVM/global.h"
+#include "leveldb/global.h"
 // because nvm_node_size() is very slow, we use global variables to record KV size and change nvm_node
 // just used to test more KVs
 // in beta version, we support 2 nvm numa nodes

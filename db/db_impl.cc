@@ -36,9 +36,10 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
-#include "NVM/global.h"
+#include "leveldb/global.h"
 #include "numa.h"
 #include "leveldb/persistant_pool.h"
+#include "leveldb/index.h"
 
 namespace leveldb {
 
@@ -212,7 +213,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       versions_(new VersionSet(dbname_, &options_,
                                &internal_comparator_)) {
   
-    //
+     b_index_ = CreateBtreeIndex();
     for (int i = 0; i < config::kNumLevels; i++) {
     background_compaction_scheduled_[i] = false;
   }
@@ -472,7 +473,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     }
   }
 
-  s = versions_->Recover(save_manifest);
+  s = versions_sst->Recover(save_manifest);
   if (!s.ok()) {
     return s;
   }
@@ -1023,7 +1024,7 @@ Status DBImpl::DoCompactionForLevel(int level) {
     
     while (versions_->current()->NumFiles(config::kNumLevels-2) > 4) {
       background_work_finished_signal_.Wait();
-      printf("level files %d\n", versions_->current()->NumFiles(config::kNumLevels-2));
+      //printf("level files %d\n", versions_->current()->NumFiles(config::kNumLevels-2));
     }    
 }
 
@@ -1646,10 +1647,11 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else if ( PM_current->Get(options, lkey, value, &stats)) {
       PMtable_hits++;
     } else {
-    s = BT_current->Get(options, lkey, value);
-   //printf("get");
-      have_stat_update = true;
-      Btree_hits++;
+      if (versions_sst->current()->NumFiles(0) > 0) {
+        s = BT_current->Get(options, lkey, value);
+        have_stat_update = true;
+        Btree_hits++;
+      }
   }
 
       mutex_.Lock();
@@ -2029,14 +2031,12 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   bool save_manifest = false;
   Status s = impl->Recover(&edit, &save_manifest);
   if (s.ok() && impl->mem_ == nullptr) {
-    printf("memtable is null\n");
     // Create new log and a corresponding memtable.
   uint64_t new_log_number = impl->versions_->NewFileNumber();
   WritableFile* lfile;                        
       s = options.env->NewWritableFile(LogFileName(impl->dbname_, new_log_number),
                                      &lfile);
     if (s.ok()) {
-      printf("new log file\n");
       edit.SetLogNumber(new_log_number);
       impl->logfile_ = lfile;
       impl->logfile_number_ = new_log_number;
@@ -2046,7 +2046,6 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
     }
     
   }else{
-    printf("memtable is not null\n");
     printf(" : %s\n",s.ToString().c_str());
   }
   if (s.ok() && save_manifest) {
@@ -2062,7 +2061,6 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
       impl->MaybeScheduleCompaction(i);
     }
   }
-printf("open\n");
   impl->mutex_.Unlock();
   if (s.ok()) {
     
