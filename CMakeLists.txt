@@ -196,6 +196,8 @@ target_sources(leveldb
     "table/two_level_iterator.h"
     "util/arena.cc"
     "util/arena.h"
+    "util/zipf.h"
+    "util/zipf.cc"
     "util/bloom.cc"
     "util/cache.cc"
     "util/coding.cc"

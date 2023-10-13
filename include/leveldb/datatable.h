@@ -1,6 +1,6 @@
 
-#ifndef STORAGE_LEVELDB_DB_DATATABLE_H_
-#define STORAGE_LEVELDB_DB_DATATABLE_H_
+#ifndef STORAGE_LEVELDB_DB_PMtable_H_
+#define STORAGE_LEVELDB_DB_PMtable_H_
 
 #include <string>
 
@@ -16,20 +16,20 @@
 namespace leveldb {
 
 class InternalKeyComparator;
-class DataTableIterator;
+class PMtableIterator;
 //typedef SkipList<char*, KeyComparator> dTable;
 
-class DataTable {
+class PMtable {
  public:
  //初始化时，需要传入一个memtable，用于初始化skiplist
 
-  explicit DataTable(const InternalKeyComparator& comparator, MemTable* mem, const Options& options_);
-  explicit DataTable(const InternalKeyComparator& comparator);
+  explicit PMtable(const InternalKeyComparator& comparator, MemTable* mem, const Options& options_);
+  explicit PMtable(const InternalKeyComparator& comparator);
 
-  DataTable(const DataTable&) = delete;
-  DataTable& operator=(const DataTable&) = delete;
+  PMtable(const PMtable&) = delete;
+  PMtable& operator=(const PMtable&) = delete;
 
-  ~DataTable();	// When compaction is completed, should delete the old datatable
+  ~PMtable();	// When compaction is completed, should delete the old PMtable
 
   // Increase reference count.
   void Ref() { ++refs_; }
@@ -49,26 +49,26 @@ class DataTable {
   //used to judge if the db should compact
   size_t ApproximateMemoryUsage();
 
-  // Return an iterator that yields the contents of the datatable.
+  // Return an iterator that yields the contents of the PMtable.
   //
   // while the returned iterator is live.  The keys returned by this
   // iterator are internal keys encoded by AppendInternalKey in the
   // db/format.{h,cc} module.
   Iterator* NewIterator();
 
-  // If datatable contains a value for key, store it in *value and return true.
-  // If datatable contains a deletion for key, store a NotFound() error
+  // If PMtable contains a value for key, store it in *value and return true.
+  // If PMtable contains a deletion for key, store a NotFound() error
   // in *status and return true.
   // Else, return false.
   // Some get operation will start with the jumpflag node instead of the start of skiplist
   bool Get(const LookupKey& key, std::string* value, Status& s);
 
-  Status Compact(DataTable* smalltable, SequenceNumber snum);
+  Status Compact(PMtable* smalltable, SequenceNumber snum);
 
  private:
 
-  friend class DataTableIterator;
-  friend class DataTableBackwardIterator;
+  friend class PMtableIterator;
+  friend class PMtableBackwardIterator;
 
   KeyComparator comparator_;
   int refs_;
@@ -82,4 +82,4 @@ class DataTable {
 
 }	// namespace leveldb
 
-#endif //STORAGE_LEVELDB_DB_DATATABLE_H_
+#endif //STORAGE_LEVELDB_DB_PMtable_H_

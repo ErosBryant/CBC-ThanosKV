@@ -21,6 +21,8 @@
 #include "util/testutil.h"
 #include "leveldb/persistant_pool.h"
 #include "leveldb/btree_index.h"
+#include "util/zipf.h"
+#include <inttypes.h>
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -68,6 +70,12 @@ static int FLAGS_num = 1000000;
 // Number of read operations to do.  If negative, do FLAGS_num reads.
 static int FLAGS_reads = -1;
 
+static int ops_between_duration_checks=1000;
+ static bool FLAGS_YCSB_uniform_distribution =0;
+ static int64_t FLAGS_ycsb_workload_num = 0;
+ static bool FLAGS_report_ops_latency=1;
+
+
 // Number of concurrent threads to run.
 static int FLAGS_threads = 1;
 
@@ -113,6 +121,7 @@ static bool FLAGS_use_existing_db = false;
 static bool FLAGS_reuse_logs = false;
 
 static int FLAGS_bits_per_key = 16;
+static int key_size_=FLAGS_bits_per_key;
 
 static int FLAGS_keys_per_datatable = 65536;
 
@@ -197,6 +206,8 @@ class Stats {
   Histogram hist_;
   std::string message_;
 
+
+
  public:
   Stats() { Start(); }
 
@@ -209,6 +220,7 @@ class Stats {
     message_.clear();
     start_ = finish_ = last_op_finish_ = g_env->NowMicros();
   }
+
 
   void Merge(const Stats& other) {
     hist_.Merge(other.hist_);
@@ -309,6 +321,10 @@ struct SharedState {
   int num_done GUARDED_BY(mu);
   bool start GUARDED_BY(mu);
 
+port::Mutex latencys_mutex;
+uint64_t *latencys = nullptr;
+uint64_t ops_num = 0;
+uint64_t ops_bytes = 0;
   SharedState(int total)
       : cv(&mu), total(total), num_initialized(0), num_done(0), start(false) {}
 };
@@ -531,6 +547,8 @@ class Benchmark {
         method = &Benchmark::SnappyCompress;
       } else if (name == Slice("snappyuncomp")) {
         method = &Benchmark::SnappyUncompress;
+      } else if (name == Slice("ycsb")) {
+        method = &Benchmark::YCSBWorkload;
       } else if (name == Slice("heapprofile")) {
         HeapProfile();
       } else if (name == Slice("stats")) {
@@ -736,6 +754,280 @@ class Benchmark {
     }
   }
 
+//----
+
+
+  Slice AllocateKey(std::unique_ptr<const char[]>* key_guard) {
+    char* data = new char[key_size_];
+    const char* const_data = data;
+    key_guard->reset(const_data);
+    return Slice(key_guard->get(), key_size_);
+  }
+  int prefix_size_;
+  int64_t keys_per_prefix_;
+  void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key) {
+    char* start = const_cast<char*>(key->data());
+    char* pos = start;
+    if (keys_per_prefix_ > 0) {
+      int64_t num_prefix = num_keys / keys_per_prefix_;
+      int64_t prefix = v % num_prefix;
+      int bytes_to_fill = std::min(prefix_size_, 8);
+       if (port::kLittleEndian) {
+        for (int i = 0; i < bytes_to_fill; ++i) {
+          pos[i] = (prefix >> ((bytes_to_fill - i - 1) << 3)) & 0xFF;
+        }
+      } else {
+        memcpy(pos, static_cast<void*>(&prefix), bytes_to_fill);
+      }
+      if (prefix_size_ > 8) {
+        // fill the rest with 0s
+        memset(pos + 8, '0', prefix_size_ - 8);
+      }
+      pos += prefix_size_;
+    }
+
+    int bytes_to_fill = std::min(key_size_ - static_cast<int>(pos - start), 8);
+   if (port::kLittleEndian) {
+      for (int i = 0; i < bytes_to_fill; ++i) {
+        pos[i] = (v >> ((bytes_to_fill - i - 1) << 3)) & 0xFF;
+      }
+    } else {
+      memcpy(pos, static_cast<void*>(&v), bytes_to_fill);
+    }
+    pos += bytes_to_fill;
+    if (key_size_ > pos - start) {
+      memset(pos, '0', key_size_ - (pos - start));
+    }
+  }
+
+
+
+class Duration {
+ public:
+  Duration(uint64_t max_seconds, int64_t max_ops, int64_t ops_per_stage = 0) {
+    max_seconds_ = max_seconds;
+    max_ops_= max_ops;
+    ops_per_stage_ = (ops_per_stage > 0) ? ops_per_stage : max_ops;
+    ops_ = 0;
+    start_at_ = g_env->NowMicros();
+  }
+
+  int64_t GetStage() { return std::min(ops_, max_ops_ - 1) / ops_per_stage_; }
+
+  bool Done(int64_t increment) {
+    if (increment <= 0) increment = 1;    // avoid Done(0) and infinite loops
+    ops_ += increment;
+
+    if (max_seconds_) {
+      // Recheck every appx 1000 ops (exact iff increment is factor of 1000)
+      auto granularity = ops_between_duration_checks;
+      if ((ops_ / granularity) != ((ops_ - increment) / granularity)) {
+        uint64_t now = g_env->NowMicros();
+        return ((now - start_at_) / 1000000) >= max_seconds_;
+      } else {
+        return false;
+      }
+    } else {
+      return ops_ > max_ops_;
+    }
+  }
+
+ private:
+  uint64_t max_seconds_;
+  int64_t max_ops_;
+  int64_t ops_per_stage_;
+  int64_t ops_;
+  uint64_t start_at_;
+};
+
+
+  void YCSBWorkload(ThreadState* thread) {
+    printf("sssssssssssssssssssssssssssssssssss\n");
+
+    // if( thread->tid == thread->shared->total - 1 ) {  //record latency and throughput per second
+    //     printf("sssssssssssssssssssssssssssssssssss1\n");
+    //   uint64_t last_ops = 0;
+    //   uint64_t start_time=g_env->NowMicros();
+    //   uint64_t last_time = start_time;
+    //   uint64_t now_done = 0;
+    //   uint64_t per_second_done;
+    //   uint64_t now_time;
+      
+    //   while(true) {
+    //     if( thread->shared->num_done >= thread->shared->total - 1 ) break;
+    //     sleep(1);
+    //     printf("test\n");
+    //     now_time = g_env->NowMicros();
+    //     thread->shared->latencys_mutex.Lock();
+    //     now_done = thread->shared->ops_num;
+    //     thread->shared->latencys_mutex.Unlock();
+
+    //     per_second_done = now_done - last_ops;
+    //     double use_time = (now_time - last_time)*1e-6;
+    //     int64_t ebytes = (value_size_ + key_size_) * per_second_done;
+    //     int64_t now_bytes = (value_size_ + key_size_) * now_done;
+    //     double now = (now_time - start_time)*1e-6;
+
+    //     // RECORD_INFO(1,"now=,%.2f,s speed=,%.2f,MB/s,%.1f,iops size=,%.1f,MB average=,%.2f,MB/s,%.1f,iops ,\n",
+    //     //             now,(1.0*ebytes/1048576.0)/use_time,1.0*per_second_done/use_time,1.0*now_bytes/1048576.0,(1.0*now_bytes/1048576.0)/now,1.0*now_done/now);
+        
+    //     uint64_t *ops_latency = thread->shared->latencys;
+    //     std::sort(ops_latency + last_ops, ops_latency + now_done);
+    //     /* for(uint64_t i = last_ops; i < now_done; i++) {
+    //       printf("%lu,%lu,%lu,%lu\n",i,ops_latency[i].stay_queue_time,ops_latency[i].execute_time,ops_latency[i].stay_queue_time + ops_latency[i].execute_time);
+    //     } */
+    //     if (per_second_done > 2) {
+    //       uint64_t cnt90 = 0.90 * per_second_done - 1 + last_ops;
+    //       uint64_t cnt99 = 0.99 * per_second_done - 1 + last_ops;
+    //       uint64_t cnt999 = 0.999 * per_second_done - 1 + last_ops;
+    //       uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
+    //       uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
+
+    //       //printf("per_second_done:%lu,last_ops:%lu,cnt90:%lu,cnt99:%lu,%lu,%lu,%lu\n",per_second_done,last_ops,cnt90,cnt99,cnt999,cnt9999,cnt99999);
+
+    //     //   RECORD_INFO(5,"%.2f,%.1f,%lu,,,%lu,,,%lu,,,%lu,,,%lu,,,\n",
+    //     //             now,1.0*per_second_done/use_time,
+    //     //             ops_latency[cnt90],
+    //     //             ops_latency[cnt99],
+    //     //             ops_latency[cnt999],
+    //     //             ops_latency[cnt9999],
+    //     //             ops_latency[cnt99999]);
+    //      }
+        
+
+    //     last_ops = now_done;
+    //     last_time = now_time;
+
+    //   }
+    // return;
+    // }
+
+    ReadOptions options;
+    RandomGenerator gen;
+    
+
+    printf("sssssssssssssssssssssssssssssssssss222\n");
+
+    init_zipf_generator(0, FLAGS_num);
+    
+    std::string value;
+    int64_t found = 0;
+    uint64_t per_op_start_time = 0;
+
+    int64_t reads_done = 0;
+    int64_t writes_done = 0;
+    Duration duration(0, FLAGS_ycsb_workload_num);
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+
+
+uint64_t max_seconds = 1;  // Previously max_seconds_ in Duration
+int64_t max_ops = FLAGS_ycsb_workload_num;  // Previously max_ops_ in Duration
+int64_t ops = 0;  // Previously ops_ in Duration
+uint64_t start_at = g_env->NowMicros();  // Previously start_at_ in Duration
+
+while (true) {
+    ops++;
+    if (max_seconds) {
+        auto granularity = ops_between_duration_checks;
+        if (ops % granularity == 0) {
+          printf("555\n");
+            uint64_t now = g_env->NowMicros();
+            if ((now - start_at) / 1000000 >= max_seconds) {
+              //printf("%d\n",max_seconds);
+                break;
+            }
+        }
+    } else {
+        if (ops > max_ops) {
+          printf("7777777\n");
+            break;
+        }
+    }
+
+     
+      printf("sssssssssssssssssssssssssssssssssss33333\n");
+      long k;
+      if (FLAGS_YCSB_uniform_distribution){
+        //Generate number from uniform distribution            
+        k = thread->rand.Next() % FLAGS_num;
+      } else { //default
+        //Generate number from zipf distribution
+        k = nextValue() % FLAGS_num;        
+        printf("??\n") ;
+      }
+      GenerateKeyFromInt(k, FLAGS_num, &key);
+
+      if (FLAGS_report_ops_latency) {   //
+        per_op_start_time = g_env->NowMicros();
+      }
+        printf("?1?\n") ;
+      int next_op = thread->rand.Next() % 100;
+              printf("?2?\n") ;
+      if (next_op < 50){
+        printf("read\n");
+        Status s = db_->Get(options, key, &value);
+        if (!s.ok() && !s.IsNotFound()) {
+          fprintf(stderr, "k=%ld; get error: %s\n", k, s.ToString().c_str());
+          //exit(1);
+          // we continue after error rather than exiting so that we can
+          // find more errors if any
+        } else if (!s.IsNotFound()) {
+          found++;
+         
+        }
+        thread->stats.FinishedSingleOp();
+        reads_done++;
+
+      } else{
+        printf("write\n");
+        //write
+        // if (FLAGS_benchmark_write_rate_limit > 0) {
+            
+        //     thread->shared->write_rate_limiter->Request(
+        //         value_size_ + key_size_, Env::IO_HIGH,
+        //         nullptr /* stats */, RateLimiter::OpType::kWrite);
+        //     thread->stats.ResetLastOpTime();
+        // }
+
+        if (FLAGS_report_ops_latency) {   //
+          per_op_start_time =g_env->NowMicros();
+        }
+
+        Status s = db_->Put(write_options_, key, gen.Generate(value_size_));
+        if (!s.ok()) {
+          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+          //exit(1);
+        } else{
+          writes_done++;
+        }             
+
+      }
+
+      if (FLAGS_report_ops_latency) {   //
+
+        thread->shared->latencys_mutex.Lock();
+        thread->shared->latencys[thread->shared->ops_num] =g_env->NowMicros() - per_op_start_time;
+        thread->shared->ops_num++;
+        thread->shared->latencys_mutex.Unlock();
+      }
+
+    } 
+
+
+
+
+    char msg[100];
+    snprintf(msg, sizeof(msg), "( reads:%" PRIu64 " writes:%" PRIu64 \
+             " total:%" PRIu64 " found:%" PRIu64 ")",
+             reads_done, writes_done, FLAGS_ycsb_workload_num, found);
+    thread->stats.AddMessage(msg);
+  }
+
+//---
+
+
   void WriteSeq(ThreadState* thread) { DoWrite(thread, true); }
 
   void WriteRandom(ThreadState* thread) { DoWrite(thread, false); }
@@ -753,12 +1045,10 @@ class Benchmark {
     int64_t bytes = 0;
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
-        for (int j = 0; j < entries_per_batch_; j++) {
-            const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
-           // std::cout << "Value of k: " << k << std::endl;  // Print the value of k
-            char key[100];
-            std::snprintf(key, sizeof(key), "%016d", k);
-
+      for (int j = 0; j < entries_per_batch_; j++) {
+        const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
+        char key[100];
+        std::snprintf(key, sizeof(key), "%016d", k);
         batch.Put(key, gen.Generate(value_size_));
         bytes += value_size_ + strlen(key);
         thread->stats.FinishedSingleOp();
@@ -1013,9 +1303,13 @@ int main(int argc, char** argv) {
       FLAGS_db = argv[i] + 5;
 	} else if (sscanf(argv[i], "--keys_per_datatable=%d%c", &n, &junk) == 1) {
 	  FLAGS_keys_per_datatable = n;
-	}  else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
+	} else if (sscanf(argv[i], "--ycsb_num=%d%c", &n, &junk) == 1) {
+	  FLAGS_ycsb_workload_num = n;
+	} else if (sscanf(argv[i], "--ycsb_uni=%d%c", &n, &junk) == 1) {
+	  FLAGS_YCSB_uniform_distribution = n;
+	}else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
 	  FLAGS_bits_per_key = n;
-    } else {
+} else {
       std::fprintf(stderr, "Invalid flag '%s'\n", argv[i]);
       std::exit(1);
     }
@@ -1031,7 +1325,7 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(6) * 1024 * 1024 * 1024);
+  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(7) * 1024 * 1024 * 1024);
 
   leveldb::Benchmark benchmark;
 

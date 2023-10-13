@@ -32,7 +32,7 @@ struct FileMetaData {
   InternalKey smallest;       // Smallest internal key served by table
   InternalKey largest;        // Largest internal key served by table
 
-  DataTable* dt;
+  PMtable* dt;
   bool mustquery;
 };
 
@@ -72,7 +72,7 @@ class VersionEdit {
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
   // ADD -------------------------------------
     void AddFile(int level, uint64_t file, uint64_t file_size,
-               const InternalKey& smallest, const InternalKey& largest, DataTable* addtable) {
+               const InternalKey& smallest, const InternalKey& largest, PMtable* addtable) {
     FileMetaData f;
     f.number = file;
     f.file_size = file_size;
@@ -115,7 +115,7 @@ class VersionEdit {
   }
 
 
- void RemoveFile(int level, DataTable* file) {
+ void RemoveFile(int level, PMtable* file) {
     deleted_files_.insert(std::make_pair(level, file));
   }
   
@@ -133,7 +133,7 @@ class VersionEdit {
   friend class VersionSet;
   friend class VersionSet_sst;
 
-  typedef std::set<std::pair<int, DataTable*>> DeletedFileSet;
+  typedef std::set<std::pair<int, PMtable*>> DeletedFileSet;
   typedef std::set<std::pair<int, uint64_t> > DeletedFileSet_SST;
 
   std::string comparator_;

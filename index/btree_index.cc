@@ -22,13 +22,17 @@ void BtreeIndex::Insert(const entry_key_t& key, const IndexMeta& meta) {
   if (ptr == nullptr) {
     exit(1);
   }
+
   ptr->size = meta.size;
   ptr->file_number = meta.file_number;
+  //printf("%d\n",meta.file_number);
   ptr->offset = meta.offset;
   clflush((char*)ptr, sizeof(IndexMeta));
   IndexMeta* old_ptr = (IndexMeta*) tree_.Insert(key, ptr);
   if (old_ptr != nullptr) {
     nvram::pfree(old_ptr);
+  }else{
+    //printf("wenti \n");
   }
 }
 
@@ -57,6 +61,7 @@ void* BtreeIndex::ThreadWrapper(void* ptr) {
   reinterpret_cast<BtreeIndex*>(ptr)->Runner();
   return NULL;
 }
+
 void BtreeIndex::AddQueue(std::deque<KeyAndMeta>& queue) {
   mutex_.Lock();
 

@@ -5,6 +5,8 @@
 #ifndef STORAGE_LEVELDB_TABLE_MERGER_H_
 #define STORAGE_LEVELDB_TABLE_MERGER_H_
 
+#include <vector>
+
 namespace leveldb {
 
 class Comparator;
@@ -18,8 +20,11 @@ class Iterator;
 // key is present in K child iterators, it will be yielded K times.
 //
 // REQUIRES: n >= 0
-Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
-                             int n);
+extern Iterator* NewMergingIterator(
+    const Comparator* comparator, Iterator** children, int n);
+
+extern Iterator* NewRangeIterator(
+    const Comparator* comparator, std::vector<Iterator*> list, int n);
 
 }  // namespace leveldb
 

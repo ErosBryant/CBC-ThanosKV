@@ -6,6 +6,7 @@ namespace leveldb {
 FFBtreeIterator::FFBtreeIterator(FFBtree* b) : valid(true), last(false) {
   btree = b;
   SeekToFirst();
+ // printf("fft\n");
 }
 
 bool FFBtreeIterator::Valid() const {
@@ -14,6 +15,7 @@ bool FFBtreeIterator::Valid() const {
 
 void FFBtreeIterator::SeekToFirst() {
   Page* page = (Page*)btree->root;
+  //printf("page   %d\n",page->count());
   while(page->hdr.leftmost_ptr != NULL) {
     //printf("page->hdr.leftmost_ptr != NULL\n");
     page = page->hdr.leftmost_ptr;

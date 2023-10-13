@@ -170,7 +170,7 @@ class DBImpl : public DB {
 
   // nvm
   Index* b_index_;
-  Status WriteLeveltoSsTable(DataTable* mem, VersionEdit* edit)
+  Status WriteLeveltoSsTable(PMtable* mem, VersionEdit* edit)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   Status WriteLevel0Table(MemTable* mem, VersionEdit* edit)
@@ -233,8 +233,8 @@ void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   const Options options_;  // options_.comparator == &internal_comparator_
   const bool owns_info_log_;
   const bool owns_cache_;
-  const std::string dbname_= "/mnt/pmemdir";
-  const std::string dbname_ssd_= "/media/eros/new1/thanos";
+  const std::string dbname_;
+  const std::string dbname_ssd_;
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;

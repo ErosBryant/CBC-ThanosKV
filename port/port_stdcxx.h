@@ -5,6 +5,11 @@
 #ifndef STORAGE_LEVELDB_PORT_PORT_STDCXX_H_
 #define STORAGE_LEVELDB_PORT_PORT_STDCXX_H_
 
+#ifndef PLATFORM_IS_LITTLE_ENDIAN
+#define PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
+#endif
+
+
 // port/port_config.h availability is automatically detected via __has_include
 // in newer compilers. If LEVELDB_HAS_PORT_CONFIG_H is defined, it overrides the
 // configuration detection.
@@ -44,6 +49,9 @@
 
 namespace leveldb {
 namespace port {
+
+static const bool kLittleEndian = PLATFORM_IS_LITTLE_ENDIAN;
+#undef PLATFORM_IS_LITTLE_ENDIAN
 
 class CondVar;
 

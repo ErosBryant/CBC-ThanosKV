@@ -9,7 +9,6 @@
 #include <sys/stat.h>
 #include <string>
 #include <vector>
-// [B-tree] Added
 namespace leveldb {
 
 

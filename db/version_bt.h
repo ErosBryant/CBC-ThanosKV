@@ -254,7 +254,7 @@ class VersionSet_sst {
   // Returns true iff some level needs a Compaction_sst.
   bool NeedsCompaction() const {
     Version_sst* v = current_;
-    if (v->compaction_score_ >= 1){
+    if (v->compaction_score_ > 1){
       return 1;
     }
    return 0;

@@ -1,5 +1,5 @@
 
-// Use datatable to replace sstable in NVM
+// Use PMtable to replace sstable in NVM
 
 #include "leveldb/datatable.h"
 #include "db/dbformat.h"
@@ -28,7 +28,8 @@ static Slice GetLengthPrefixedSlice(const char* data) {
 这行代码初始化table_成员。它接受五个参数，分别是：
 comparator_，arena_的地址，mem中的table_的地址，传入的options_以及bloom_.
 */
-DataTable::DataTable(const InternalKeyComparator& comparator, MemTable* mem, const Options& options_)
+
+PMtable::PMtable(const InternalKeyComparator& comparator, MemTable* mem, const Options& options_)
   : arena_(&(mem->arena_)),
   comparator_(comparator),
   bloom_(options_.use_datatable_bloom?  new MergeableBloom(options_) : nullptr),
@@ -36,21 +37,21 @@ DataTable::DataTable(const InternalKeyComparator& comparator, MemTable* mem, con
   IsLastTable(false),
   refs_(0) {}
 
-DataTable::DataTable(const InternalKeyComparator& comparator)
+PMtable::PMtable(const InternalKeyComparator& comparator)
   : comparator_(comparator),
     bloom_(nullptr),
     table_(comparator_),
     IsLastTable(true),
     refs_(0) {}
 
-DataTable::~DataTable() {
+PMtable::~PMtable() {
   assert(refs_ == 0);
   if (bloom_ != nullptr) {
     delete bloom_;
   }
 }
 
-size_t DataTable::ApproximateMemoryUsage() { return table_.GetSize(); }
+size_t PMtable::ApproximateMemoryUsage() { return table_.GetSize(); }
 
 // Encode a suitable internal key target for "target" and return it.
 // Uses *scratch as scratch space, and the returned pointer will point
@@ -62,14 +63,14 @@ static const char* EncodeKey(std::string* scratch, const Slice& target) {
   return scratch->data();
 }
 
-class DataTableIterator : public Iterator {
+class PMtableIterator : public Iterator {
  public:
-  explicit DataTableIterator(nvm_Table* table) : iter_(table) {}
+  explicit PMtableIterator(nvm_Table* table) : iter_(table) {}
 
-  DataTableIterator(const DataTableIterator&) = delete;
-  DataTableIterator& operator=(const DataTableIterator&) = delete;
+  PMtableIterator(const PMtableIterator&) = delete;
+  PMtableIterator& operator=(const PMtableIterator&) = delete;
 
-  ~DataTableIterator() override = default;
+  ~PMtableIterator() override = default;
 
   bool Valid() const override { return iter_.Valid(); }
   void Seek(const Slice& k) override { iter_.Seek(EncodeKey(&tmp_, k)); }
@@ -90,9 +91,9 @@ class DataTableIterator : public Iterator {
   std::string tmp_;  // For passing to EncodeKey
 };
 
-Iterator* DataTable::NewIterator() { return new DataTableIterator(&table_); }
+Iterator* PMtable::NewIterator() { return new PMtableIterator(&table_); }
 
-bool DataTable::Get(const LookupKey& key, std::string* value, Status& s) {
+bool PMtable::Get(const LookupKey& key, std::string* value, Status& s) {
   if (bloom_ != nullptr) {
     Slice tmpkey = key.user_key();
     if(!(bloom_->KeyMayMatch(tmpkey))) {
@@ -125,7 +126,7 @@ bool DataTable::Get(const LookupKey& key, std::string* value, Status& s) {
   return false;
 }
 
-Status DataTable::Compact(DataTable* dtable, SequenceNumber snum) {
+Status PMtable::Compact(PMtable* dtable, SequenceNumber snum) {
 	if(dtable != nullptr) {
     if (IsLastTable) {
       table_.LastTableCompact(&(dtable->table_), snum);

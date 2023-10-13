@@ -34,19 +34,62 @@ void* FFBtree::Search(const entry_key_t& key){
   return (char *)t;
 }
 
-void* FFBtree::Insert(const entry_key_t& key, void* right){ //need to be string
-  Page* p = (Page*)root;
+// void* FFBtree::Insert(const entry_key_t& key, void* right){ //need to be string
+//   Page* p = (Page*)root;
 
-  while(p->hdr.leftmost_ptr != NULL) {
-    p = (Page*)p->linear_search(key);
-  }
+//   while(p->hdr.leftmost_ptr != NULL) {
+//     p = (Page*)p->linear_search(key);
+//   }
 
-  void* ret = nullptr;
-  if(!p->store(this, NULL, key, right, true, nullptr, &ret)) { // store
-    return Insert(key, right);
+//   void* ret = nullptr;
+//   if(!p->store(this, NULL, key, right, true, nullptr, &ret)) { // store
+//     return Insert(key, right);
+//   }
+//   return ret;
+// }
+
+
+void* FFBtree::Insert(const entry_key_t& key, void* right) {
+  while (true) {
+    Page* p = (Page*)root;
+
+    while (p->hdr.leftmost_ptr != NULL) {
+      p = (Page*)p->linear_search(key);
+    }
+
+    void* ret = nullptr;
+    if (p->store(this, NULL, key, right, true, nullptr, &ret)) { // store successfully
+      return ret;
+    }
+    // otherwise, loop back and try again
   }
-  return ret;
 }
+
+// void* FFBtree::Insert(const entry_key_t& key, void* right) {
+//   const int maxRetries = 10; // 我们为重试设置一个最大值
+//   int currentTry = 0;
+
+//   while (currentTry < maxRetries) {
+//     Page* p = (Page*)root;
+
+//     while (p->hdr.leftmost_ptr != NULL) {
+//       p = (Page*)p->linear_search(key);
+//     }
+
+//     void* ret = nullptr;
+//     if (p->store(this, NULL, key, right, true, nullptr, &ret)) { 
+//       return ret; // 如果存储成功，直接返回
+//     }
+
+//     // 如果我们到这里，表示存储失败了。我们稍等片刻再重试。
+//     currentTry++;
+//     std::this_thread::sleep_for(std::chrono::milliseconds(10 * currentTry)); // 逐渐增加等待时间，给其他线程操作的机会
+//   }
+
+//   // 如果我们已经尝试了太多次，就抛出一个异常或返回错误。
+//   throw std::runtime_error("Unable to insert after multiple attempts.");
+// }
+
 
 void* FFBtree::InsertInternal(void* left, const entry_key_t& key,
                              void* right, uint32_t level) {

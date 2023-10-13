@@ -602,7 +602,7 @@ class VersionSet::Builder {
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
   struct LevelState {
     FileSet* added_files;
-    std::set<DataTable*> deleted_files;
+    std::set<PMtable*> deleted_files;
   };
 
   VersionSet* vset_;
@@ -655,7 +655,7 @@ class VersionSet::Builder {
   void SaveTo_d(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
-    DataTable* lasttable;
+    PMtable* lasttable;
     for (int level = 0; level < config::kNumLevels; level++) {
       //printf("level: %d\n", level);
       // Merge the set of added files with the set of pre-existing files.
@@ -700,7 +700,7 @@ class VersionSet::Builder {
   void SaveTo(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
-    DataTable* lasttable;
+    PMtable* lasttable;
     for (int level = 0; level < config::kNumLevels; level++) {
       //printf("level: %d\n", level);
       // Merge the set of added files with the set of pre-existing files.
@@ -1000,7 +1000,7 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
-  printf("dbname_: %s\n", dbname_.c_str());
+ // printf("dbname_: %s\n", dbname_.c_str());
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     printf("current: %s\n", current.c_str());
@@ -1096,12 +1096,11 @@ Status VersionSet::Recover(bool* save_manifest) {
     MarkFileNumberUsed(log_number);
   }
 
-  printf("next_file: %d\n", next_file);
   if (s.ok()) {
-    printf("next_file: %d\n", next_file);
+
     Version* v = new Version(this);
     builder.SaveTo(v);
-    printf("v->files_[0].size(): %d\n", v->files_[0].size());
+
     // Install recovered version
     Finalize(v);
     AppendVersion(v);

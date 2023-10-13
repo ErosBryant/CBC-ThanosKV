@@ -117,6 +117,12 @@ class SkipList {
   size_t wa;
   uint64_t dumptime;
 
+// no
+  bool Compact(SkipList<Key, Comparator>* list);
+  void DirectlyUpdateToNewPMTable(Node* node);
+  void DeleteNode(Node* node);
+  bool certainCondition(Node* a, Node* b);
+  void UpdateValidKeysFromArr(const std::vector<Key>& arr);
   // public function
   Node* Insert(const Key& key, const size_t& len, Node** prev, bool max);
   explicit SkipList(Comparator cmp, Arena* arena, const SkipList<Key, Comparator>* list, const Options& options_, MergeableBloom* bloom_);
@@ -609,11 +615,127 @@ void SkipList<Key, Comparator>::DeleteNode(Node** pre, Node* n) {
     pre[i]->SetNext(i, n->Next(i));
   }
 }
+//---------------
+template <typename Key, class Comparator>
+SkipList<Key, Comparator>* MergeSkipLists(const SkipList<Key, Comparator>& skipList1, const SkipList<Key, Comparator>& skipList2) {
 
-// new->old
+    SkipList<Key, Comparator>* mergedList = new SkipList<Key, Comparator>();
+
+
+    typename SkipList<Key, Comparator>::Iterator it1(&skipList1);
+    typename SkipList<Key, Comparator>::Iterator it2(&skipList2);
+
+    it1.SeekToFirst();
+    it2.SeekToFirst();
+
+
+    while (it1.Valid() && it2.Valid()) {
+        int cmp = Comparator()(it1.key(), it2.key());
+
+        if (cmp < 0) {  
+            mergedList->Insert(it1.key());
+            it1.Next();
+        } else if (cmp > 0) {
+            mergedList->Insert(it2.key());
+            it2.Next();
+        } else {  
+            if (!areNodesDuplicates(it1.node_, it2.node_)) {
+                mergedList->Insert(it1.key());  // 可选择哪一个键进行插入，因为它们是相等的
+            }
+            it1.Next();
+            it2.Next();
+        }
+    }
+
+
+    while (it1.Valid()) {
+        mergedList->Insert(it1.key());
+        it1.Next();
+    }
+
+    // 插入来自skipList2的剩余键（如果有）
+    while (it2.Valid()) {
+        mergedList->Insert(it2.key());
+        it2.Next();
+    }
+
+    return mergedList;
+}
+
+template <typename Key, class Comparator>
+bool areNodesDuplicates(const typename SkipList<Key, Comparator>::Node* x, const typename SkipList<Key, Comparator>::Node* y) {
+    return x->key == y->key && x->len == y->len;
+}
+
+
+template <typename Key, class Comparator>
+bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list) {
+    Node *x = head_;
+    Node *y = list->head_;
+    std::vector<Key> Arr;
+
+    while (y != nullptr) {
+        if (areNodesDuplicates(x, y)) {
+            Arr.push_back(x->key);
+        } else {
+            DirectlyUpdateToNewPMTable(x);
+        }
+        
+        if (areNodesDuplicates(y, y->Next(0))) {
+            DeleteNode(y->Next(0));
+        } else if (certainCondition(y, y->Next(0))) {
+            y = y->Next(0);
+        } else {
+            break;
+        }
+
+        x = x->Next(0);
+        
+    }
+
+    UpdateValidKeysFromArr(Arr);
+
+
+    return true;
+}
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::DirectlyUpdateToNewPMTable(Node* node) {
+    // For demonstration, let's assume we just modify the node's key or any other attribute.
+    // node->key = modifiedValue;
+    this.insert(node->key, node->key->length());
+}
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::DeleteNode(Node* node) {
+
+    Node* prev = head_;
+    while (prev->Next(0) != node && prev->Next(0) != nullptr) {
+        prev = prev->Next(0);
+    }
+    if (prev->Next(0) == node) {
+        prev->SetNext(0, node->Next(0));
+    }
+}
+template <typename Key, class Comparator>
+bool SkipList<Key, Comparator>::certainCondition(Node* a, Node* b) {
+    // For demonstration, let's just compare the keys of the two nodes.
+    return a->key < b->key;
+}
+
+
+template <typename Key, class Comparator>
+void SkipList<Key, Comparator>::UpdateValidKeysFromArr(const std::vector<Key>& arr) {
+    for (const Key& key : arr) {
+        this->Insert(key, key.length()); // Assuming key length as the second parameter
+    };
+}
+
+
+// ------------------
+
 template <typename Key, class Comparator>
 bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, SequenceNumber snum) {
-  wa = 0;
+
   Node *x = list->head_->Next(0);
   Node *y, *ypre[kMaxHeight], *xpre[kMaxHeight];
   for (int i = 0; i < kMaxHeight; i++) {
@@ -629,7 +751,7 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
     insertingnode.store(x, std::memory_order_release);
     DeleteNode(xpre, x);
     Insert(x, ypre);
-	  wa += (3 * 8 * x->height);
+	  
     y = x;
     PreNext(ypre, y->height);
 
@@ -640,7 +762,9 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
       }
       first = false;
     }
-
+// 0b0010 : 이진수로 표현된 2
+// 0b10 : 이진수로 표현된 2
+// 0b11 : 이진수로 표현된 3
     // LargeTable duplication
     while (y->Next(0) != nullptr) {
       int r = NewCompare(y, y->Next(0), true, snum);

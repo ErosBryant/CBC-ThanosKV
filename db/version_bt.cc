@@ -42,7 +42,7 @@ static double MaxBytesForLevel(const Options* options, int level) {
   // Note: the result for level zero is not really used since we set
 
   //level 0 1g
-  double result = 8000. * 1048576.0;
+  double result = 10000. * 848576.0;
   while (level > 1) {
     result *= 5;
     level--;
@@ -328,6 +328,7 @@ Status Version_sst::Get(const ReadOptions& options,
   Slice user_key = key.user_key();
   const Comparator* ucmp = vset_->icmp_.user_comparator();
 
+
   // [B-tree] Added
   Index* index = vset_->options()->index;
   const IndexMeta* index_meta = index->Get(user_key);
@@ -358,6 +359,7 @@ Status Version_sst::Get(const ReadOptions& options,
         return s;
     }
   }
+  //printf("aaaa %d\n",a);
   return Status::NotFound(Slice());
 }
 
@@ -464,7 +466,7 @@ void Version_sst::GetOverlappingInputs(int level, const InternalKey* begin,
                                    const InternalKey* end,
                                    std::vector<FileMetaData*>* inputs) {
   assert(level >= 0);
-  assert(level < config::kNumLevels_sst);
+  assert(level < config::kNumLevels);
   inputs->clear();
   Slice user_begin, user_end;
   if (begin != nullptr) {
@@ -484,19 +486,20 @@ void Version_sst::GetOverlappingInputs(int level, const InternalKey* begin,
       // "f" is completely after specified range; skip it
     } else {
       inputs->push_back(f);
-        // Level-0 files may overlap each other.  So check if the newly
-        // added file has expanded the range.  If so, restart search.
-        if (begin != nullptr && user_cmp->Compare(file_start, user_begin) < 0) {
-          user_begin = file_start;
-          inputs->clear();
-          i = 0;
-        } else if (end != nullptr &&
-                   user_cmp->Compare(file_limit, user_end) > 0) {
-          user_end = file_limit;
-          inputs->clear();
-          i = 0;
-        }
-      
+      // if (level == 0) {
+      //   // Level-0 files may overlap each other.  So check if the newly
+      //   // added file has expanded the range.  If so, restart search.
+      //   if (begin != nullptr && user_cmp->Compare(file_start, user_begin) < 0) {
+      //     user_begin = file_start;
+      //     inputs->clear();
+      //     i = 0;
+      //   } else if (end != nullptr &&
+      //              user_cmp->Compare(file_limit, user_end) > 0) {
+      //     user_end = file_limit;
+      //     inputs->clear();
+      //     i = 0;
+      //   }
+      // }
     }
   }
 }
@@ -837,6 +840,7 @@ Status VersionSet_sst::Recover(bool* save_manifest) {
   std::string current;
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
+    printf("asas\n");
     return s;
   }
   if (current.empty() || current[current.size() - 1] != '\n') {
@@ -846,9 +850,12 @@ Status VersionSet_sst::Recover(bool* save_manifest) {
 
   std::string dscname = dbname_ + "/" + current;
   SequentialFile* file;
+  printf("asdasdasd\n");
   s = env_->NewSequentialFile(dscname, &file);
   if (!s.ok()) {
+    printf("???\n");
     if (s.IsNotFound()) {
+      printf("asdasdasdasd\n");
       return Status::Corruption("CURRENT points to a non-existent file",
                                 s.ToString());
     }
@@ -1214,7 +1221,7 @@ Compaction_sst* VersionSet_sst::PickCompaction() {
   Compaction_sst* c;
   int level;
 
-  const bool size_compaction = (current_->compaction_score_ >= 1);
+  const bool size_compaction = (current_->compaction_score_ > 1);
   if (size_compaction) {
     level = current_->compaction_level_;
     assert(level >= 0);
@@ -1241,6 +1248,7 @@ Compaction_sst* VersionSet_sst::PickCompaction() {
   c->input_version_ = current_;
   c->input_version_->Ref();
 
+  // if (level == 0) {
   // // Files in level 0 may overlap each other, so pick up all overlapping ones
   //    InternalKey smallest, largest;
   //    GetRange(c->inputs_[0], &smallest, &largest);
@@ -1249,7 +1257,7 @@ Compaction_sst* VersionSet_sst::PickCompaction() {
   // //   // which will include the picked file.
   //    current_->GetOverlappingInputs(0, &smallest, &largest, &c->inputs_[0]);
   //    assert(!c->inputs_[0].empty());
-
+  // }
   SetupOtherInputs(c);
 
   return c;

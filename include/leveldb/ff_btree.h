@@ -519,7 +519,15 @@ public:
 
       Page* ret;
 
-      // insert the key
+      // // insert the key
+      // if (key < split_key) {
+      //   insert_key(key, right, &num_entries);
+      //   ret = this;
+      // } else {
+      //   sibling->insert_key(key, right, &sibling_cnt);
+      //   ret = sibling;
+      // }
+
       if (key < split_key) {
         insert_key(key, right, &num_entries);
         ret = this;
