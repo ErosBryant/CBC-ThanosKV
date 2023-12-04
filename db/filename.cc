@@ -43,6 +43,7 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
+  //printf("DescriptorFileName: %s\n", dbname.c_str());
   std::snprintf(buf, sizeof(buf), "/MANIFEST-%06llu",
                 static_cast<unsigned long long>(number));
   return dbname + buf;

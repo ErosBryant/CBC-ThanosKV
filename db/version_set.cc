@@ -189,7 +189,7 @@ class Version::LevelFileNumIterator : public Iterator {
   bool Valid() const override { return index_ < flist_->size(); }
   void Seek(const Slice& target) override {
 
-    //index_ = FindFile(icmp_, *flist_, target);
+    index_ = FindFile(icmp_, *flist_, target);
   }
   void SeekToFirst() override { index_ = 0; }
   void SeekToLast() override {

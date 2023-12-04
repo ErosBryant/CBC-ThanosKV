@@ -5,6 +5,7 @@
 #include "util/arena.h"
 #include "string.h"
 #include "leveldb/global.h"
+#include "leveldb/persistant_pool.h"
 
 namespace leveldb {
 
@@ -104,9 +105,14 @@ char* Arena::AllocateNewBlock(size_t block_bytes) {
   char* result;
   if (IsMemTable) {
     result = new char[block_bytes];
+   // printf("AllocateNewBlocksssss %p\n", result);
   } else {
-    NvmNodeSizeRecord(block_bytes);
-    result = (char*)numa_alloc_onnode(block_bytes, nvm_node);
+    NvmNodeSizeRecord(block_bytes); 
+    //result = (char*)numa_alloc_onnode(block_bytes, nvm_node);
+
+    result = (char*) nvram::pmalloc(block_bytes);
+    //printf("AllocateNewBlock %p\n", result);
+    //printf("char* %s\n", (char*) nvram::pmalloc(block_bytes));
     memory_usage_.fetch_add(block_bytes + sizeof(char*),
                               std::memory_order_relaxed);
     block_size_.push_back(block_bytes);

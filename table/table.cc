@@ -222,36 +222,6 @@ Iterator* Table::BlockIterator(const ReadOptions& options,
   Cache::Handle* cache_handle = NULL;
   Block* block = NULL;
   BlockContents contents;
-#ifdef PERF_LOG
-  if (block_cache != NULL) {
-    char cache_key_buffer[16];
-    EncodeFixed64(cache_key_buffer, rep_->cache_id);
-    EncodeFixed64(cache_key_buffer+8, handle.offset());
-    Slice key(cache_key_buffer, sizeof(cache_key_buffer));
-    cache_handle = block_cache->Lookup(key);
-    if (cache_handle != NULL) {
-      block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
-    } else {
-      uint64_t start_micros = benchmark::NowMicros();
-      s = ReadBlock(rep_->file, options, handle, &contents);
-      benchmark::LogMicros(benchmark::BLOCK_READ, benchmark::NowMicros() - start_micros);
-      if (s.ok()) {
-        block = new Block(contents);
-        if (contents.cachable && options.fill_cache) {
-          cache_handle = block_cache->Insert(
-            key, block, block->size(), &DeleteCachedBlock);
-        }
-      }
-    }
-  } else {
-    uint64_t start_micros = benchmark::NowMicros();
-    s = ReadBlock(rep_->file, options, handle, &contents);
-    benchmark::LogMicros(benchmark::BLOCK_READ, benchmark::NowMicros() - start_micros);
-    if (s.ok()) {
-      block = new Block(contents);
-    }
-  }
-#else
   if (block_cache != NULL) {
     char cache_key_buffer[16];
     EncodeFixed64(cache_key_buffer, rep_->cache_id);
@@ -276,7 +246,6 @@ Iterator* Table::BlockIterator(const ReadOptions& options,
       block = new Block(contents);
     }
   }
-#endif
   Iterator* iter;
   if (block != NULL) {
     iter = block->NewIterator(rep_->options.comparator);

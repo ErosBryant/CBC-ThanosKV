@@ -674,7 +674,7 @@ class PosixEnv : public Env {
       *result = env;
     } else {
       char buf[100];
-      std::snprintf(buf, sizeof(buf), "/mnt/pmemdir/%d",
+      std::snprintf(buf, sizeof(buf), "/mnt/new1/Thanoskv",
                     static_cast<int>(::geteuid()));
       *result = buf;
     }

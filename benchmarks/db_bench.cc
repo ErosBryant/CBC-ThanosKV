@@ -1320,12 +1320,12 @@ int main(int argc, char** argv) {
   // Choose a location for the test database if none given with --db=<path>
   if (FLAGS_db == nullptr) {
     leveldb::g_env->GetTestDirectory(&default_db_path);
-    default_db_path += "/dbbench";
+    //default_db_path += "/dbbench";
         std::cout << "Default db path: " << default_db_path << "\n";
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/my_pool", static_cast<size_t>(7) * 1024 * 1024 * 1024);
+  leveldb::nvram::create_pool("/mnt/pmemdir/nvm.pool", static_cast<size_t>(7) * 1024 * 1024 * 1024);
 
   leveldb::Benchmark benchmark;
 

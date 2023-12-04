@@ -24,6 +24,7 @@ class PMtable {
  //初始化时，需要传入一个memtable，用于初始化skiplist
 
   explicit PMtable(const InternalKeyComparator& comparator, MemTable* mem, const Options& options_);
+  explicit PMtable(const InternalKeyComparator& comparator,const std::string dbname,MemTable* mem, const Options& options_);
   explicit PMtable(const InternalKeyComparator& comparator);
 
   PMtable(const PMtable&) = delete;
@@ -78,6 +79,7 @@ class PMtable {
   MergeableBloom* bloom_;
   nvm_Table table_;
   bool IsLastTable;
+  std::string dbname_;
 };
 
 }	// namespace leveldb

@@ -37,6 +37,16 @@ PMtable::PMtable(const InternalKeyComparator& comparator, MemTable* mem, const O
   IsLastTable(false),
   refs_(0) {}
 
+PMtable::PMtable(const InternalKeyComparator& comparator,const std::string dbname,MemTable* mem, const Options& options_)
+  : arena_(&(mem->arena_)),
+  dbname_(dbname),
+  comparator_(comparator),
+  bloom_(options_.use_datatable_bloom?  new MergeableBloom(options_) : nullptr),
+	table_(comparator_, &arena_, &(mem->table_), options_, bloom_),
+  IsLastTable(false),
+  refs_(0) {}
+
+
 PMtable::PMtable(const InternalKeyComparator& comparator)
   : comparator_(comparator),
     bloom_(nullptr),

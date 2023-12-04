@@ -188,7 +188,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
       dbname_(dbname),
-      dbname_ssd_(raw_options.nvm_option.sst_path2),
+      dbname_ssd_(raw_options.nvm_option.sst_path),
       //dbname_(raw_options.nvm_option.pmem_path),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
@@ -271,7 +271,7 @@ Status DBImpl::NewDB() {
   new_db.SetNextFile(2);
   new_db.SetLastSequence(0);
 
-  const std::string manifest = DescriptorFileName(dbname_, 1);
+  const std::string manifest = DescriptorFileName(dbname_ssd_, 1);
   WritableFile* file;
   Status s = env_->NewWritableFile(manifest, &file);
   if (!s.ok()) {
@@ -289,7 +289,7 @@ Status DBImpl::NewDB() {
   delete file;
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
-    s = SetCurrentFile(env_, dbname_, 1);
+    s = SetCurrentFile(env_, dbname_ssd_, 1);
   } else {
     env_->RemoveFile(manifest);
   }
@@ -385,7 +385,7 @@ void DBImpl::RemoveObsoleteFiles() {
   versions_->AddLiveFiles(&live);
 
   std::vector<std::string> filenames;
-  env_->GetChildren(dbname_, &filenames);  // Ignoring errors on purpose
+  env_->GetChildren(dbname_ssd_, &filenames);  // Ignoring errors on purpose
   uint64_t number;
   FileType type;
   std::vector<std::string> files_to_delete;
@@ -434,7 +434,7 @@ void DBImpl::RemoveObsoleteFiles() {
   // are therefore safe to delete while allowing other threads to proceed.
   mutex_.Unlock();
   for (const std::string& filename : files_to_delete) {
-    env_->RemoveFile(dbname_ + "/" + filename);
+    env_->RemoveFile(dbname_ssd_ + "/" + filename);
   }
   mutex_.Lock();
 }
@@ -445,14 +445,15 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // Ignore error from CreateDir since the creation of the DB is
   // committed only when the descriptor is created, and this directory
   // may already exist from a previous failed creation attempt.
-  env_->CreateDir(dbname_);
+  env_->CreateDir(dbname_ssd_);
+  
   assert(db_lock_ == nullptr);
-  Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
+  Status s = env_->LockFile(LockFileName(dbname_ssd_), &db_lock_);
   if (!s.ok()) {
     return s;
   }
 
-  if (!env_->FileExists(CurrentFileName(dbname_))) {
+  if (!env_->FileExists(CurrentFileName(dbname_ssd_))) {
     if (options_.create_if_missing) {
       s = NewDB();
       if (!s.ok()) {
@@ -460,16 +461,16 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
       }
     } else {
       return Status::InvalidArgument(
-          dbname_, "does not exist (create_if_missing is false)");
+          dbname_ssd_, "does not exist (create_if_missing is false)");
     }
   } else {
     if (options_.error_if_exists) {
-      return Status::InvalidArgument(dbname_,
+      return Status::InvalidArgument(dbname_ssd_,
                                      "exists (error_if_exists is true)");
     }
   }
 
-  s = versions_->Recover(save_manifest);
+  s = versions_sst->Recover(save_manifest);
   if (!s.ok()) {
     return s;
   }
@@ -485,7 +486,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   const uint64_t min_log = versions_->LogNumber();
   const uint64_t prev_log = versions_->PrevLogNumber();
   std::vector<std::string> filenames;
-  s = env_->GetChildren(dbname_, &filenames);
+  s = env_->GetChildren(dbname_ssd_, &filenames);
   if (!s.ok()) {
     return s;
   }
@@ -505,7 +506,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     char buf[50];
     std::snprintf(buf, sizeof(buf), "%d missing files; e.g.",
                   static_cast<int>(expected.size()));
-    return Status::Corruption(buf, TableFileName(dbname_, *(expected.begin())));
+    return Status::Corruption(buf, TableFileName(dbname_ssd_, *(expected.begin())));
   }
 
   // Recover in the order in which the logs were generated
@@ -704,8 +705,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit) {
   {
     mutex_.Unlock();
     
-    PMtable* newdt = new PMtable(internal_comparator_, mem, options_);
-	
+    //PMtable* newdt = new PMtable(internal_comparator_, mem, options_);
+	  PMtable* newdt = new PMtable(internal_comparator_, dbname_, mem, options_);
     meta.dt = newdt;
 
     uint32_t len;
@@ -1377,12 +1378,12 @@ Status DBImpl::CompactionToSsd(CompactionState* compact , uint64_t smallest_snap
       PMtable* olddt = oldfmd->dt;
       PMtable* newdt = newfmd->dt;
       
-      // if (newfmd == nullptr) {
-      //     printf("newfmd is null\n");
-      //     newdt = new PMtable(internal_comparator_); 
-      // } else {
-      //     newdt = newfmd->dt;
-      // }
+      if (newfmd == nullptr) {
+          printf("newfmd is null\n");
+          newdt = new PMtable(internal_comparator_); 
+      } else {
+          newdt = newfmd->dt;
+      }
       mutex_.Unlock();
       
       s = newdt->Compact(olddt, smallest_snapshot);
@@ -1408,20 +1409,20 @@ Status DBImpl::CompactionToSsd(CompactionState* compact , uint64_t smallest_snap
       compact->outputs.push_back(out);
       nvmn_size_delete(out.file_size);
 
-  if (s.ok() && shutting_down_.load(std::memory_order_acquire)) {
-    s = Status::IOError("Deleting DB during Pmemtable compaction");
-  }
+    if (s.ok() && shutting_down_.load(std::memory_order_acquire)) {
+      s = Status::IOError("Deleting DB during Pmemtable compaction");
+    }
 
 
-  if (s.ok()) {
-    s = InstallCompactionResults(compact);
-  }
-  if (!s.ok()) {
+    if (s.ok()) {
+      s = InstallCompactionResults(compact);
+    }
+    if (!s.ok()) {
 
-    RecordBackgroundError(s);
-  }
+      RecordBackgroundError(s);
+    }
 
-      return s;
+        return s;
 
 }
 
@@ -1889,7 +1890,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
-      s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
+      s = env_->NewWritableFile(LogFileName(dbname_ssd_, new_log_number), &lfile);
       if (!s.ok()) {
         // Avoid chewing through file number space in a tight loop.
         versions_->ReuseFileNumber(new_log_number);
@@ -2037,11 +2038,12 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
   Status s = impl->Recover(&edit, &save_manifest);
+  
   if (s.ok() && impl->mem_ == nullptr) {
     // Create new log and a corresponding memtable.
   uint64_t new_log_number = impl->versions_->NewFileNumber();
   WritableFile* lfile;                        
-      s = options.env->NewWritableFile(LogFileName(impl->dbname_, new_log_number),
+      s = options.env->NewWritableFile(LogFileName(impl->dbname_ssd_, new_log_number),
                                      &lfile);
     if (s.ok()) {
       edit.SetLogNumber(new_log_number);

@@ -850,12 +850,10 @@ Status VersionSet_sst::Recover(bool* save_manifest) {
 
   std::string dscname = dbname_ + "/" + current;
   SequentialFile* file;
-  printf("asdasdasd\n");
+
   s = env_->NewSequentialFile(dscname, &file);
   if (!s.ok()) {
-    printf("???\n");
     if (s.IsNotFound()) {
-      printf("asdasdasdasd\n");
       return Status::Corruption("CURRENT points to a non-existent file",
                                 s.ToString());
     }
