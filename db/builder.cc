@@ -3,6 +3,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/builder.h"
+#include <mod/Vlog.h>
 
 #include "db/filename.h"
 #include "db/dbformat.h"
@@ -13,6 +14,8 @@
 #include "leveldb/iterator.h"
 
 namespace leveldb {
+
+
 
 Status BuildTable(const std::string& dbname,
                   Env* env,
@@ -38,8 +41,16 @@ Status BuildTable(const std::string& dbname,
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
       Slice value = iter->value();
+
+      //uint64_t value_address = adgMod::db->vlog->AddRecord(key, value);
+      // char buffer[sizeof(uint64_t) + sizeof(uint32_t)];
+      // EncodeFixed64(buffer, value_address);
+      // EncodeFixed32(buffer + sizeof(uint64_t), value.size());
+
+
       if (prev_key.empty() || options.comparator->Compare(ExtractUserKey(prev_key), ExtractUserKey(key)) != 0) {
-        builder->Add(key, value);
+         builder->Add(key, value);
+        //builder->Add(key,(Slice) {buffer, sizeof(uint64_t) + sizeof(uint32_t)});
         prev_key = key;
       }
     }

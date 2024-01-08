@@ -9,6 +9,7 @@
 #include <deque>
 #include <set>
 #include <string>
+#include <mod/Vlog.h>
 
 #include "db/dbformat.h"
 #include "db/log_writer.h"
@@ -196,6 +197,9 @@ class DBImpl : public DB {
 
 Status DoCompactionForLevel(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 Status Compactpmtable(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+//kv separate
+adgMod::VLog* vlog;
 
 
 void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);

@@ -16,6 +16,8 @@ namespace ycsbc {
         //set option
         leveldb::Options options;
         SetOptions(&options, props);
+            
+
 
         leveldb::Status s = leveldb::DB::Open(options, dbfilename, &db_);
 

@@ -40,6 +40,8 @@
 #include "numa.h"
 #include "leveldb/persistant_pool.h"
 #include "leveldb/index.h"
+#include "mod/util.h"
+#include "mod/Vlog.h"
 
 namespace leveldb {
 
@@ -213,10 +215,14 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       versions_(new VersionSet(dbname_, &options_,
                                &internal_comparator_)) {
   
-     b_index_ = CreateBtreeIndex();
+      b_index_ = CreateBtreeIndex();
+      adgMod::db = this;
+      vlog = new adgMod::VLog(dbname_ + "/vlog.txt");
+
     for (int i = 0; i < config::kNumLevels; i++) {
     background_compaction_scheduled_[i] = false;
   }
+
   
   NvmNodeSizeInit(options_);
 }
@@ -240,6 +246,8 @@ DBImpl::~DBImpl() {
       counter++;
     }
   }
+  
+
   mutex_.Unlock();
 
   if (db_lock_ != nullptr) {
@@ -1360,7 +1368,8 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
 }
 
 // --------------------
-
+// pmtable -> sstable
+// need to separation
 Status DBImpl::CompactionToSsd(CompactionState* compact , uint64_t smallest_snapshot){
   
   mutex_.AssertHeld();
@@ -1392,7 +1401,11 @@ Status DBImpl::CompactionToSsd(CompactionState* compact , uint64_t smallest_snap
       out.dt = newdt;
       base->Ref();
       
+      // kv seperation
+      
+      
       s = WriteLeveltoSsTable(newdt,&edit);
+      
       
       base->Unref();
       uint32_t len;
@@ -1696,8 +1709,27 @@ void DBImpl::ReleaseSnapshot(const Snapshot* snapshot) {
 }
 
 // Convenience methods
+// kv seperation
 Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
-  return DB::Put(o, key, val);
+  if (adgMod::KV_S >= 1) {
+    #if time
+    uint64_t start = env_->NowMicros();
+    #endif 
+    uint64_t value_address = adgMod::db->vlog->AddRecord(key, val);
+
+     //printf("value_address %lu\n", value_address);
+    char buffer[sizeof(uint64_t) + sizeof(uint32_t)];
+    EncodeFixed64(buffer, value_address);
+    EncodeFixed32(buffer + sizeof(uint64_t), val.size());
+    #if time
+    uint64_t end = env_->NowMicros();
+    log_time += (end - start);
+    #endif 
+    return DB::Put(o, key, (Slice) {buffer, sizeof(uint64_t) + sizeof(uint32_t)});
+  } else {
+    return DB::Put(o, key, val);
+  
+}
 }
 
 Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
@@ -1734,16 +1766,33 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
-      bool sync_error = false;
-      if (status.ok() && options.sync) {
-        status = logfile_->Sync();
-        if (!status.ok()) {
-          sync_error = true;
-        }
+       bool sync_error = false;
+      if (adgMod::KV_S == 0) {
+          #if time
+          uint64_t start = env_->NowMicros();
+          #endif
+          status = log_->AddRecord(WriteBatchInternal::Contents(updates));
+          #if time
+          uint64_t end = env_->NowMicros();
+          log_time += (end - start);
+          #endif
+          if (status.ok() && options.sync) {
+              status = logfile_->Sync();
+              if (!status.ok()) {
+                  sync_error = true;
+              }
+          }
       }
+
       if (status.ok()) {
-        status = WriteBatchInternal::InsertInto(write_batch, mem_);
+        #if time
+        uint64_t start2 = env_->NowMicros();
+        #endif
+        status = WriteBatchInternal::InsertInto(updates, mem_);
+        #if time
+        uint64_t end2 = env_->NowMicros();
+        w_mem_time += (end2 - start2);
+        #endif
       }
       mutex_.Lock();
       if (sync_error) {
@@ -2026,7 +2075,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
   Status DB::Open(const Options& options, const std::string& dbname_, DB** dbptr) {
   *dbptr = nullptr;
-
+  adgMod::env = options.env;
 
   // DBImpl* impl = new DBImpl(options, dbname_disk, dbname_mem);
   DBImpl* impl = new DBImpl(options,dbname_);

@@ -145,6 +145,15 @@ target_sources(leveldb
     "util/persist.h"
     "util/persistant_pool.cc"
 
+# kv seperation
+
+    "mod/Vlog.cc"
+    "mod/Vlog.h"
+    "mod/util.h"
+    "mod/util.cc"
+    "mod/Counter.cc"
+    "mod/Counter.h"
+
     "db/db_impl.cc"
     "db/db_impl.h"
     "db/db_iter.cc"
@@ -172,6 +181,7 @@ target_sources(leveldb
     "db/version_set.h"
     "db/version_bt.cc"
     "db/version_bt.h"
+    
     
     "db/write_batch_internal.h"
     "db/write_batch.cc"
@@ -248,7 +258,15 @@ target_sources(leveldb
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/index_iterator.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/ff_btree_iterator.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/datatable.h"
+
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/util.cc"
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/util.h"
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/Vlog.cc"
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/Vlog.h"
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/Counter.cc"
+    # "${LEVELDB_PUBLIC_INCLUDE_DIR}/mod/Counter.h"
 )
+
 
 if (WIN32)
   target_sources(leveldb
