@@ -57,6 +57,7 @@ class ErrorEnv : public EnvWrapper {
 
   Status NewWritableFile(const std::string& fname,
                          WritableFile** result) override {
+    printf("ErrorEnv::NewWritableFile\n");
     if (writable_file_error_) {
       ++num_writable_file_errors_;
       *result = nullptr;

@@ -46,6 +46,7 @@ Arena::~Arena() {
 }
 
 char* Arena::AllocateFallback(size_t bytes) {
+  //printf("AllocateFallback %lu\n", bytes);
   // MemTable only alloc one large block (6MB)
   if (IsMemTable) {
     alloc_ptr_ = AllocateNewBlock(kMemSize);

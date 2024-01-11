@@ -255,6 +255,7 @@ class InMemoryEnv : public EnvWrapper {
 
   Status NewWritableFile(const std::string& fname,
                          WritableFile** result) override {
+    printf("m3m NewWritableFile\n");
     MutexLock lock(&mutex_);
     FileSystem::iterator it = file_map_.find(fname);
 
@@ -388,3 +389,8 @@ class InMemoryEnv : public EnvWrapper {
 Env* NewMemEnv(Env* base_env) { return new InMemoryEnv(base_env); }
 
 }  // namespace leveldb
+
+
+
+ // void Schedule(void (*background_work_function)(void* background_work_arg, int level),
+   //             void* background_work_arg, int level) override;

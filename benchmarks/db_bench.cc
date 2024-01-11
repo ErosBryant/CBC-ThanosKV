@@ -23,6 +23,7 @@
 #include "leveldb/btree_index.h"
 #include "util/zipf.h"
 #include <inttypes.h>
+#include "mod/util.h"
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -354,7 +355,7 @@ class Benchmark {
   int heap_counter_;
 
   void PrintHeader() {
-    const int kKeySize = 16;
+    const int kKeySize = key_size_;
     PrintEnvironment();
     std::fprintf(stdout, "Keys:       %d bytes each\n", kKeySize);
     std::fprintf(
@@ -547,8 +548,8 @@ class Benchmark {
         method = &Benchmark::SnappyCompress;
       } else if (name == Slice("snappyuncomp")) {
         method = &Benchmark::SnappyUncompress;
-      } else if (name == Slice("ycsb")) {
-        method = &Benchmark::YCSBWorkload;
+      // } else if (name == Slice("ycsb")) {
+      //   method = &Benchmark::YCSBWorkload;
       } else if (name == Slice("heapprofile")) {
         HeapProfile();
       } else if (name == Slice("stats")) {
@@ -841,193 +842,6 @@ class Duration {
 };
 
 
-  void YCSBWorkload(ThreadState* thread) {
-    printf("sssssssssssssssssssssssssssssssssss\n");
-
-    // if( thread->tid == thread->shared->total - 1 ) {  //record latency and throughput per second
-    //     printf("sssssssssssssssssssssssssssssssssss1\n");
-    //   uint64_t last_ops = 0;
-    //   uint64_t start_time=g_env->NowMicros();
-    //   uint64_t last_time = start_time;
-    //   uint64_t now_done = 0;
-    //   uint64_t per_second_done;
-    //   uint64_t now_time;
-      
-    //   while(true) {
-    //     if( thread->shared->num_done >= thread->shared->total - 1 ) break;
-    //     sleep(1);
-    //     printf("test\n");
-    //     now_time = g_env->NowMicros();
-    //     thread->shared->latencys_mutex.Lock();
-    //     now_done = thread->shared->ops_num;
-    //     thread->shared->latencys_mutex.Unlock();
-
-    //     per_second_done = now_done - last_ops;
-    //     double use_time = (now_time - last_time)*1e-6;
-    //     int64_t ebytes = (value_size_ + key_size_) * per_second_done;
-    //     int64_t now_bytes = (value_size_ + key_size_) * now_done;
-    //     double now = (now_time - start_time)*1e-6;
-
-    //     // RECORD_INFO(1,"now=,%.2f,s speed=,%.2f,MB/s,%.1f,iops size=,%.1f,MB average=,%.2f,MB/s,%.1f,iops ,\n",
-    //     //             now,(1.0*ebytes/1048576.0)/use_time,1.0*per_second_done/use_time,1.0*now_bytes/1048576.0,(1.0*now_bytes/1048576.0)/now,1.0*now_done/now);
-        
-    //     uint64_t *ops_latency = thread->shared->latencys;
-    //     std::sort(ops_latency + last_ops, ops_latency + now_done);
-    //     /* for(uint64_t i = last_ops; i < now_done; i++) {
-    //       printf("%lu,%lu,%lu,%lu\n",i,ops_latency[i].stay_queue_time,ops_latency[i].execute_time,ops_latency[i].stay_queue_time + ops_latency[i].execute_time);
-    //     } */
-    //     if (per_second_done > 2) {
-    //       uint64_t cnt90 = 0.90 * per_second_done - 1 + last_ops;
-    //       uint64_t cnt99 = 0.99 * per_second_done - 1 + last_ops;
-    //       uint64_t cnt999 = 0.999 * per_second_done - 1 + last_ops;
-    //       uint64_t cnt9999 = 0.9999 * per_second_done - 1 + last_ops;
-    //       uint64_t cnt99999 = 0.99999 * per_second_done - 1 + last_ops;
-
-    //       //printf("per_second_done:%lu,last_ops:%lu,cnt90:%lu,cnt99:%lu,%lu,%lu,%lu\n",per_second_done,last_ops,cnt90,cnt99,cnt999,cnt9999,cnt99999);
-
-    //     //   RECORD_INFO(5,"%.2f,%.1f,%lu,,,%lu,,,%lu,,,%lu,,,%lu,,,\n",
-    //     //             now,1.0*per_second_done/use_time,
-    //     //             ops_latency[cnt90],
-    //     //             ops_latency[cnt99],
-    //     //             ops_latency[cnt999],
-    //     //             ops_latency[cnt9999],
-    //     //             ops_latency[cnt99999]);
-    //      }
-        
-
-    //     last_ops = now_done;
-    //     last_time = now_time;
-
-    //   }
-    // return;
-    // }
-
-    ReadOptions options;
-    RandomGenerator gen;
-    
-
-    printf("sssssssssssssssssssssssssssssssssss222\n");
-
-    init_zipf_generator(0, FLAGS_num);
-    
-    std::string value;
-    int64_t found = 0;
-    uint64_t per_op_start_time = 0;
-
-    int64_t reads_done = 0;
-    int64_t writes_done = 0;
-    Duration duration(0, FLAGS_ycsb_workload_num);
-
-    std::unique_ptr<const char[]> key_guard;
-    Slice key = AllocateKey(&key_guard);
-
-
-uint64_t max_seconds = 1;  // Previously max_seconds_ in Duration
-int64_t max_ops = FLAGS_ycsb_workload_num;  // Previously max_ops_ in Duration
-int64_t ops = 0;  // Previously ops_ in Duration
-uint64_t start_at = g_env->NowMicros();  // Previously start_at_ in Duration
-
-while (true) {
-    ops++;
-    if (max_seconds) {
-        auto granularity = ops_between_duration_checks;
-        if (ops % granularity == 0) {
-          printf("555\n");
-            uint64_t now = g_env->NowMicros();
-            if ((now - start_at) / 1000000 >= max_seconds) {
-              //printf("%d\n",max_seconds);
-                break;
-            }
-        }
-    } else {
-        if (ops > max_ops) {
-          printf("7777777\n");
-            break;
-        }
-    }
-
-     
-      printf("sssssssssssssssssssssssssssssssssss33333\n");
-      long k;
-      if (FLAGS_YCSB_uniform_distribution){
-        //Generate number from uniform distribution            
-        k = thread->rand.Next() % FLAGS_num;
-      } else { //default
-        //Generate number from zipf distribution
-        k = nextValue() % FLAGS_num;        
-        printf("??\n") ;
-      }
-      GenerateKeyFromInt(k, FLAGS_num, &key);
-
-      if (FLAGS_report_ops_latency) {   //
-        per_op_start_time = g_env->NowMicros();
-      }
-        printf("?1?\n") ;
-      int next_op = thread->rand.Next() % 100;
-              printf("?2?\n") ;
-      if (next_op < 50){
-        printf("read\n");
-        Status s = db_->Get(options, key, &value);
-        if (!s.ok() && !s.IsNotFound()) {
-          fprintf(stderr, "k=%ld; get error: %s\n", k, s.ToString().c_str());
-          //exit(1);
-          // we continue after error rather than exiting so that we can
-          // find more errors if any
-        } else if (!s.IsNotFound()) {
-          found++;
-         
-        }
-        thread->stats.FinishedSingleOp();
-        reads_done++;
-
-      } else{
-        printf("write\n");
-        //write
-        // if (FLAGS_benchmark_write_rate_limit > 0) {
-            
-        //     thread->shared->write_rate_limiter->Request(
-        //         value_size_ + key_size_, Env::IO_HIGH,
-        //         nullptr /* stats */, RateLimiter::OpType::kWrite);
-        //     thread->stats.ResetLastOpTime();
-        // }
-
-        if (FLAGS_report_ops_latency) {   //
-          per_op_start_time =g_env->NowMicros();
-        }
-
-        Status s = db_->Put(write_options_, key, gen.Generate(value_size_));
-        if (!s.ok()) {
-          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
-          //exit(1);
-        } else{
-          writes_done++;
-        }             
-
-      }
-
-      if (FLAGS_report_ops_latency) {   //
-
-        thread->shared->latencys_mutex.Lock();
-        thread->shared->latencys[thread->shared->ops_num] =g_env->NowMicros() - per_op_start_time;
-        thread->shared->ops_num++;
-        thread->shared->latencys_mutex.Unlock();
-      }
-
-    } 
-
-
-
-
-    char msg[100];
-    snprintf(msg, sizeof(msg), "( reads:%" PRIu64 " writes:%" PRIu64 \
-             " total:%" PRIu64 " found:%" PRIu64 ")",
-             reads_done, writes_done, FLAGS_ycsb_workload_num, found);
-    thread->stats.AddMessage(msg);
-  }
-
-//---
-
-
   void WriteSeq(ThreadState* thread) { DoWrite(thread, true); }
 
   void WriteRandom(ThreadState* thread) { DoWrite(thread, false); }
@@ -1035,7 +849,7 @@ while (true) {
   void DoWrite(ThreadState* thread, bool seq) {
     if (num_ != FLAGS_num) {
       char msg[100];
-      std::snprintf(msg, sizeof(msg), "(%d ops)", num_);
+      snprintf(msg, sizeof(msg), "(%d ops)", num_);
       thread->stats.AddMessage(msg);
     }
 
@@ -1048,16 +862,17 @@ while (true) {
       for (int j = 0; j < entries_per_batch_; j++) {
         const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
         char key[100];
-        std::snprintf(key, sizeof(key), "%016d", k);
-        batch.Put(key, gen.Generate(value_size_));
+        snprintf(key, sizeof(key), "%016d", k);
+        //batch.Put(key, gen.Generate(value_size_));
+        db_->Put(write_options_, key, gen.Generate(value_size_));
         bytes += value_size_ + strlen(key);
         thread->stats.FinishedSingleOp();
       }
-      s = db_->Write(write_options_, &batch);
-      if (!s.ok()) {
-        std::fprintf(stderr, "put error: %s\n", s.ToString().c_str());
-        std::exit(1);
-      }
+//      s = db_->Write(write_options_, &batch);
+//      if (!s.ok()) {
+//        fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+//        exit(1);
+//      }
     }
     thread->stats.AddBytes(bytes);
   }
@@ -1301,13 +1116,16 @@ int main(int argc, char** argv) {
       FLAGS_open_files = n;
     } else if (strncmp(argv[i], "--db=", 5) == 0) {
       FLAGS_db = argv[i] + 5;
-	} else if (sscanf(argv[i], "--keys_per_datatable=%d%c", &n, &junk) == 1) {
+	  } else if (sscanf(argv[i], "--vlog=%d%c", &n, &junk) == 1 && 
+    (n == 0 || n == 1)){
+      adgMod::KV_S = n;
+    } else if (sscanf(argv[i], "--keys_per_datatable=%d%c", &n, &junk) == 1) {
 	  FLAGS_keys_per_datatable = n;
 	} else if (sscanf(argv[i], "--ycsb_num=%d%c", &n, &junk) == 1) {
 	  FLAGS_ycsb_workload_num = n;
 	} else if (sscanf(argv[i], "--ycsb_uni=%d%c", &n, &junk) == 1) {
 	  FLAGS_YCSB_uniform_distribution = n;
-	}else if (sscanf(argv[i], "--bits_per_key=%d%c", &n, &junk) == 1) {
+	}else if (sscanf(argv[i], "--key_size=%d%c", &n, &junk) == 1) {
 	  FLAGS_bits_per_key = n;
 } else {
       std::fprintf(stderr, "Invalid flag '%s'\n", argv[i]);
@@ -1325,7 +1143,7 @@ int main(int argc, char** argv) {
     FLAGS_db = default_db_path.c_str();
   }
 
-  leveldb::nvram::create_pool("/mnt/pmemdir/nvm.pool", static_cast<size_t>(7) * 1024 * 1024 * 1024);
+  leveldb::nvram::create_pool("/mnt/pmemdir/nvm.pool", static_cast<size_t>(20) * 1024 * 1024 * 1024);
 
   leveldb::Benchmark benchmark;
 

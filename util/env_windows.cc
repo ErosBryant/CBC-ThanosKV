@@ -242,8 +242,8 @@ class WindowsMmapReadableFile : public RandomAccessFile {
   Limiter* const mmap_limiter_;
   const std::string filename_;
 };
-
 class WindowsWritableFile : public WritableFile {
+
  public:
   WindowsWritableFile(std::string filename, ScopedHandle handle)
       : pos_(0), handle_(std::move(handle)), filename_(std::move(filename)) {}
@@ -436,6 +436,7 @@ class WindowsEnv : public Env {
 
   Status NewWritableFile(const std::string& filename,
                          WritableFile** result) override {
+    //printf("NewWritableFile2\n");                            
     DWORD desired_access = GENERIC_WRITE;
     DWORD share_mode = 0;  // Exclusive access.
     ScopedHandle handle = ::CreateFileA(

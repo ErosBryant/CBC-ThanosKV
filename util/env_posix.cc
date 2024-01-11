@@ -509,19 +509,21 @@ class PosixEnv : public Env {
     return Status::OK();
   }
 
-  Status NewRandomAccessFile(const std::string& filename,
+    Status NewRandomAccessFile(const std::string& filename,
                              RandomAccessFile** result) override {
+    //printf("filename: %s\n", filename.c_str());
+
     *result = nullptr;
-    int fd = ::open(filename.c_str(), O_RDONLY | kOpenBaseFlags);
+    int fd = ::open(filename.c_str(), O_RDONLY);
     if (fd < 0) {
       return PosixError(filename, errno);
     }
 
-    if (!mmap_limiter_.Acquire()) {
+    if (!mmap_limiter_.Acquire() || filename.find("vlog") != std::string::npos) {
+      posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
       *result = new PosixRandomAccessFile(filename, fd, &fd_limiter_);
       return Status::OK();
     }
-
     uint64_t file_size;
     Status status = GetFileSize(filename, &file_size);
     if (status.ok()) {
@@ -540,18 +542,22 @@ class PosixEnv : public Env {
       mmap_limiter_.Release();
     }
     return status;
+
   }
 
   Status NewWritableFile(const std::string& filename,
                          WritableFile** result) override {
+    //printf("wfilename: %s\n", filename.c_str());                      
     int fd = ::open(filename.c_str(),
                     O_TRUNC | O_WRONLY | O_CREAT | kOpenBaseFlags, 0644);
     if (fd < 0) {
+     // printf("fd < 0\n");
       *result = nullptr;
       return PosixError(filename, errno);
     }
 
     *result = new PosixWritableFile(filename, fd);
+   // printf("result: %p\n", *result);
     return Status::OK();
   }
 
@@ -674,8 +680,10 @@ class PosixEnv : public Env {
       *result = env;
     } else {
       char buf[100];
-      std::snprintf(buf, sizeof(buf), "/mnt/new1/Thanoskv",
+      std::snprintf(buf, sizeof(buf), "/tmp/leveldbtest-%d",
                     static_cast<int>(::geteuid()));
+      // std::snprintf(buf, sizeof(buf), "/mnt/pmemdir/leveldb-%d",
+      //               static_cast<int>(::geteuid()));
       *result = buf;
     }
 
@@ -684,6 +692,7 @@ class PosixEnv : public Env {
 
     return Status::OK();
   }
+
 
   Status NewLogger(const std::string& filename, Logger** result) override {
     int fd = ::open(filename.c_str(),

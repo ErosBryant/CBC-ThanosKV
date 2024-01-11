@@ -185,13 +185,13 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
 
       internal_comparator_(raw_options.comparator),
       internal_filter_policy_(raw_options.filter_policy),
-      options_(SanitizeOptions(raw_options.nvm_option.sst_path2, &internal_comparator_,
+      options_(SanitizeOptions(raw_options.nvm_option.sst_path, &internal_comparator_,
                                &internal_filter_policy_, raw_options)),
       owns_info_log_(options_.info_log != raw_options.info_log),
       owns_cache_(options_.block_cache != raw_options.block_cache),
-      dbname_(dbname),
+      //dbname_(dbname),
       dbname_ssd_(raw_options.nvm_option.sst_path),
-      //dbname_(raw_options.nvm_option.pmem_path),
+      dbname_(raw_options.nvm_option.pmem_path),
       mem_stall_time_(0),
       L0_stop_stall_time_(0),
       l0_slow_tall_time_(0),
@@ -213,18 +213,23 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       versions_sst(new VersionSet_sst(dbname_ssd_, &options_, table_cache_,
                                &internal_comparator_)),
       versions_(new VersionSet(dbname_, &options_,
-                               &internal_comparator_)) {
+                               &internal_comparator_)){
+      adgMod::db = this;
+      
+      
+      vlog = new adgMod::VLog(dbname_ssd_ + "/vlog.txt");
+
+      
+                                
   
       b_index_ = CreateBtreeIndex();
-      adgMod::db = this;
-      vlog = new adgMod::VLog(dbname_ + "/vlog.txt");
 
-    for (int i = 0; i < config::kNumLevels; i++) {
-    background_compaction_scheduled_[i] = false;
-  }
+      for (int i = 0; i < config::kNumLevels; i++) {
+        background_compaction_scheduled_[i] = false;
+      }
 
-  
-  NvmNodeSizeInit(options_);
+    
+    NvmNodeSizeInit(options_);
 }
 
 DBImpl::~DBImpl() {
@@ -268,7 +273,7 @@ DBImpl::~DBImpl() {
   if (owns_cache_) {
     delete options_.block_cache;
   }
-
+  delete vlog;
 }
 
 
@@ -701,6 +706,7 @@ Status DBImpl::WriteLeveltoSsTable(PMtable* pt, VersionEdit* edit) {
 
 //memtable -> pmtable
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit) {
+  //printf("WriteLevel0Table\n");
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
@@ -708,13 +714,13 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit) {
   pending_outputs_.insert(meta.number);
   Log(options_.info_log, "Level-0 table #%llu: started",
       (unsigned long long)meta.number);
-
+  
   Status s;
   {
     mutex_.Unlock();
     
-    //PMtable* newdt = new PMtable(internal_comparator_, mem, options_);
-	  PMtable* newdt = new PMtable(internal_comparator_, dbname_, mem, options_);
+    PMtable* newdt = new PMtable(internal_comparator_, mem, options_);
+	  //PMtable* newdt = new PMtable(internal_comparator_, dbname_, mem, options_);
     meta.dt = newdt;
 
     uint32_t len;
@@ -1025,7 +1031,6 @@ Status DBImpl::DoCompactionForLevel(int level) {
     Status s;
     MutexLock l(&mutex_);
     printf("wait for background Compaction\n"); 
-    
     while (versions_->current()->NumFiles(config::kNumLevels-2) > 4) {
       background_work_finished_signal_.Wait();
       //printf("level files %d\n", versions_->current()->NumFiles(config::kNumLevels-2));
@@ -1636,6 +1641,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
 
   MemTable* mem = mem_;
   MemTable* imm = imm_;
+
   Version* PM_current = versions_->current();
   Version_sst* BT_current = versions_sst->current();
   mem->Ref();
@@ -1657,8 +1663,9 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
        imm_hits++;
       // Done
-    } else if ( PM_current->Get(options, lkey, value, &stats)) {
+    } else if (PM_current->Get(options, lkey, value, &stats)) {
       PMtable_hits++;
+
     } else {
       if (versions_sst->current()->NumFiles(0) > 0) {
         s = BT_current->Get(options, lkey, value);
@@ -1666,6 +1673,25 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
         Btree_hits++;
       }
   }
+//
+    if (adgMod::KV_S == 1 && s.ok() ) {
+    
+    #if time
+    uint64_t start2 = env_->NowMicros();
+    #endif
+    uint64_t value_address = DecodeFixed64(value->c_str());
+    uint32_t value_size = DecodeFixed32(value->c_str() + sizeof(uint64_t));
+    
+
+   // printf("address: %lu, size: %u\n", value_address, value_size);
+
+    *value = std::move(adgMod::db->vlog->ReadRecord(value_address, value_size));
+    // printf("value***: %s\n", value->c_str());
+     #if time
+    uint64_t end2 = env_->NowMicros();
+    vlog_imm += (end2 - start2);
+     #endif
+     }
 
       mutex_.Lock();
   }
@@ -1715,6 +1741,7 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
     #if time
     uint64_t start = env_->NowMicros();
     #endif 
+    //printf("key: %s, value: %s\n", key.ToString().c_str(), val.ToString().c_str());
     uint64_t value_address = adgMod::db->vlog->AddRecord(key, val);
 
      //printf("value_address %lu\n", value_address);
@@ -2002,21 +2029,49 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     char buf[200];
     std::snprintf(buf, sizeof(buf),
                   "           Compactions\n"
-                  "Level  Files Size(MB) \n"
+                  "P.Level  Files Size(MB) \n"
                   "---------------------\n");
     value->append(buf);
     for (int level = 0; level < config::kNumLevels; level++) {
       int files = versions_->NumLevelFiles(level);
       if (stats_[level].micros > 0 || files > 0) {
-        std::snprintf(buf, sizeof(buf), "%3d %8d %8.0f\n",
+        std::snprintf(buf, sizeof(buf), "P.%3d %8d %8.0f\n",
                       level, files, versions_->NumLevelBytes(level) / 1048576.0);
                       //stats_[level].micros / 1e6,
                       //stats_[level].bytes_read / 1048576.0,
                       //stats_[level].bytes_written / 1048576.0);
         value->append(buf);
-        std::cout << "\nwrite in SSD size (MB):" <<versions_sst->NumLevelBytes(level) / 1048576.0 << std::endl;
+       // std::cout << "\nwrite in SSD size (MB):" <<versions_sst->NumLevelBytes(level) / 1048576.0 << std::endl;
+    
       }
     };
+    
+    if (versions_sst->NumLevelFiles(0) > 0) {
+    char Sbuf[200];
+    std::snprintf(Sbuf, sizeof(Sbuf),
+                  "\nS.Level  Files Size(MB) \n"
+                  "---------------------\n");
+    value->append(Sbuf);
+    for (int level = 0; level < config::kNumLevels_sst; level++) {
+      int files = versions_sst->NumLevelFiles(level);
+    
+      if (_stats_[level].micros > 0 || files > 0) {
+        std::snprintf(Sbuf, sizeof(Sbuf), "S.%3d %8d %8.0f\n",
+                      level, files, versions_sst->NumLevelBytes(level) / 1048576.0);
+                      //stats_[level].micros / 1e6,
+                      //stats_[level].bytes_read / 1048576.0,
+                      //stats_[level].bytes_written / 1048576.0);
+        value->append(Sbuf);
+        //std::cout << "\nwrite in SSD size (MB):" <<versions_sst->NumLevelBytes(level) / 1048576.0 << std::endl;
+      }
+    };
+    }
+
+    // while (versions_->current()->NumFiles(config::kNumLevels-1) > 4) {
+       background_work_finished_signal_.Wait();
+    //   //printf("level files %d\n", versions_->current()->NumFiles(config::kNumLevels-2));
+    // } 
+
     return true;
   } else if (in == "sstables") {
     *value = versions_->current()->DebugString();
@@ -2035,7 +2090,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     value->append(buf);
     return true;
   }
-
+  //HandleOverflowToSSD();
   return false;
 }
 
@@ -2076,6 +2131,8 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   Status DB::Open(const Options& options, const std::string& dbname_, DB** dbptr) {
   *dbptr = nullptr;
   adgMod::env = options.env;
+  // printf("option.env: %p\n", options.env);
+  // printf("option.env: %p\n", adgMod::env);
 
   // DBImpl* impl = new DBImpl(options, dbname_disk, dbname_mem);
   DBImpl* impl = new DBImpl(options,dbname_);
@@ -2114,7 +2171,8 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   }
 
   if (s.ok()) {
-    impl->RemoveObsoleteFiles();
+    //impl->RemoveObsoleteFiles();
+    impl->deleteObsoleteFiles();
     for (int i = 0; i < config::kNumLevels; i++) {
       impl->MaybeScheduleCompaction(i);
     }

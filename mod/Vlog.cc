@@ -16,11 +16,18 @@ const int buffer_size_max = 300 * 1024;
 
 namespace adgMod {
 
+
+
 VLog::VLog(const std::string& vlog_name) :
     writer(nullptr),
     reader(nullptr) {
     adgMod::env->NewWritableFile(vlog_name, &writer);
+
+    // printf("env: %p\n", adgMod::env);
+    // printf("env->NewWritableFile: %p\n", writer);
     adgMod::env->NewRandomAccessFile(vlog_name, &reader);
+    // printf("env->NewRandomAccessFile: %p\n", reader);
+    
     buffer.reserve(buffer_size_max * 2);
     struct ::stat file_stat;
     ::stat(vlog_name.c_str(), &file_stat);
@@ -38,6 +45,7 @@ uint64_t VLog::AddRecord(const Slice& key, const Slice& value) {
 }
 
 string VLog::ReadRecord(uint64_t address, uint32_t size) {
+
     if (address >= vlog_size) return string(buffer.c_str() + address - vlog_size, size);
 
     if (address + size > vlog_size) {
@@ -68,11 +76,17 @@ int VLog::getvlog_buffer() {
 }
 
 void VLog::Flush() {
+
     if (buffer.empty()) return;
 
+
     vlog_size += buffer.size();
+
+
     writer->Append(buffer);
+
     writer->Flush();
+
     buffer.clear();
     buffer.reserve(buffer_size_max * 2);
 }
@@ -89,31 +103,6 @@ VLog::~VLog() {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
+
+

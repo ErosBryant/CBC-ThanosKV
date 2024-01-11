@@ -42,6 +42,7 @@ static double MaxBytesForLevel(const Options* options, int level) {
   // Note: the result for level zero is not really used since we set
 
   //level 0 1g
+  //double result = 10000. * 848576.0;
   double result = 10000. * 848576.0;
   while (level > 1) {
     result *= 5;
@@ -466,7 +467,7 @@ void Version_sst::GetOverlappingInputs(int level, const InternalKey* begin,
                                    const InternalKey* end,
                                    std::vector<FileMetaData*>* inputs) {
   assert(level >= 0);
-  assert(level < config::kNumLevels);
+  assert(level < config::kNumLevels_sst);
   inputs->clear();
   Slice user_begin, user_end;
   if (begin != nullptr) {
@@ -1070,7 +1071,7 @@ int VersionSet_sst::NumLevelFiles(int level) const {
 
 const char* VersionSet_sst::LevelSummary(LevelSummaryStorage* scratch) const {
   // Update code if kNumLevels_sst changes
-  static_assert(config::kNumLevels_sst == 7, "");
+  //static_assert(config::kNumLevels_sst == 7, "");
   std::snprintf(
       scratch->buffer, sizeof(scratch->buffer), "files sst[ %d %d %d %d %d %d %d ]",
       int(current_->files_[0].size()), int(current_->files_[1].size()),

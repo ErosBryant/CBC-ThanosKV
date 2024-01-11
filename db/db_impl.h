@@ -200,7 +200,7 @@ Status Compactpmtable(int level) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
 //kv separate
 adgMod::VLog* vlog;
-
+std::atomic<int> version_count;
 
 void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
