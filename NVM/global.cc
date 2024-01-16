@@ -10,15 +10,31 @@ size_t nvm_use = 0L;
 long long nvm_total = 0L;
 long long ops_num = 0L;
 
-
 void NvmNodeSizeInit(const Options& options_) {
     nvm_node = options_.nvm_node;
     nvm_next_node = options_.nvm_next_node;
-    long tmp;
-    numa_node_size(nvm_node, &tmp);
-    nvm_free_space = (size_t)tmp - 16L * 1024 * 1024 * 1024; 
-	
+
+    long long tmp_ll;
+    long tmp_l;
+    
+    #ifdef ENVIRONMENT_REQUIRES_LONG_LONG
+    numa_node_size(nvm_node, &tmp_ll);
+    nvm_free_space = static_cast<size_t>(tmp_ll) - 16L * 1024 * 1024 * 1024;
+    #else
+    numa_node_size(nvm_node, &tmp_l);
+    nvm_free_space = static_cast<size_t>(tmp_l) - 16L * 1024 * 1024 * 1024;
+    #endif
 }
+
+
+
+// void NvmNodeSizeInit(const Options& options_) {
+//     nvm_node = options_.nvm_node;
+//     nvm_next_node = options_.nvm_next_node;
+//     long tmp;
+//     numa_node_size(nvm_node, &tmp);
+//     nvm_free_space = (size_t)tmp - 16L * 1024 * 1024 * 1024; 
+// }
 
 void nvmn_size_delete(size_t s) {
     nvm_use-=s;
