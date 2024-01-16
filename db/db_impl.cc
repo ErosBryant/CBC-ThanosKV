@@ -1128,11 +1128,11 @@ Status DBImpl::DoCompactionWork_sst(CompactionState_sst* compact) {
       compact->compaction->level() + 1);
 
     // [B-tree] Added
-    // auto m_ = b_index_->Get(ExtractUserKey(key));
-    // assert(m_ != nullptr);
-    // if (!compact->compaction->IsInput(m_->file_number)) {
-    //   drop = true;
-    // }
+    auto m_ = b_index_->Get(ExtractUserKey(key));
+    assert(m_ != nullptr);
+    if (!compact->compaction->IsInput(m_->file_number)) {
+      drop = true;
+    }
 
 
 
@@ -1152,8 +1152,11 @@ Status DBImpl::DoCompactionWork_sst(CompactionState_sst* compact) {
       compact->builder->Add(key, input->value());
 
       // Close output file if it is big enough
+      // builder存放的size > maxoutputfile size 的话
       if (compact->builder->FileSize() >=
           compact->compaction->MaxOutputFileSize()) {
+          // 完成一个sst文件的写入
+          
         status = FinishCompactionOutputFile(compact, input);
         if (!status.ok()) {
           break;
@@ -1707,7 +1710,9 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
+  //printf("options.snapshot %lu\n", options.snapshot);
   Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed);
+  //printf("latest_snapshot %lu\n", latest_snapshot);
   return NewDBIterator(this, user_comparator(), iter,
                        (options.snapshot != nullptr
                             ? static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number()
@@ -2020,6 +2025,9 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
   std::cout << "memtable stall time: " <<1.0 * mem_stall_time_ /1000000 << " s" << std::endl;
   std::cout << "L0 stall time: " << 1.0 * L0_stop_stall_time_ /1000000<< "  s" << std::endl; 
   std::cout << "L0 slow stall time: " << 1.0 * l0_slow_tall_time_ /1000000 << "  s" << std::endl; 
+  if(adgMod::KV_S==1){
+      printf("\nvlog buffer size: %u\n", adgMod::db->vlog->getvlog_buffer());
+    }
 
   // std::cout << "memtable stall count: " << mem_stall_time_ << " " << std::endl;
   // std::cout << "L0 stall count: " <<  L0_stop_stall_time_ << "  " << std::endl; 
@@ -2068,7 +2076,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     }
 
     // while (versions_->current()->NumFiles(config::kNumLevels-1) > 4) {
-       background_work_finished_signal_.Wait();
+    //background_work_finished_signal_.Wait();
     //   //printf("level files %d\n", versions_->current()->NumFiles(config::kNumLevels-2));
     // } 
 
