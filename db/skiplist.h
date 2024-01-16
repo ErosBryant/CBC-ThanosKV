@@ -699,12 +699,21 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list) {
     return true;
 }
 
+// template <typename Key, class Comparator>
+// void SkipList<Key, Comparator>::DirectlyUpdateToNewPMTable(Node* node) {
+//     // For demonstration, let's assume we just modify the node's key or any other attribute.
+//     // node->key = modifiedValue;
+//     this.insert(node->key, node->key->length());
+
+// }
 template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::DirectlyUpdateToNewPMTable(Node* node) {
     // For demonstration, let's assume we just modify the node's key or any other attribute.
     // node->key = modifiedValue;
-    this.insert(node->key, node->key->length());
+    this->insert(node->key, node->key->length()); // 使用 -> 而不是 .
 }
+
+
 template <typename Key, class Comparator>
 void SkipList<Key, Comparator>::DeleteNode(Node* node) {
 
@@ -770,7 +779,8 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
       int r = NewCompare(y, y->Next(0), true, snum);
       if (r == 0b0010) {
         for (int i = 0; i < GetMaxHeight(); i++) {
-          if (largest[i] = y->Next(0)) {
+          if ((largest[i] = y->Next(0))) {
+
             largest[i] = ypre[i];
           } else {
             break;
