@@ -1016,8 +1016,8 @@ Status DBImpl::DoCompactionForLevel(int level) {
   }
     //Status s = (level == config::kNumLevels - 1) ? CompactionToSsd(compact,smallest_snapshot) : DoCompactionWork(compact,smallest_snapshot);
     Status s = DoCompactionWork(compact,smallest_snapshot);
-
     CleanupCompaction(compact);
+
     if (!s.ok()) {
         RecordBackgroundError(s);
     }
@@ -1356,13 +1356,19 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
     
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 0)->dt);
     compact->compaction->edit()->RemoveFile(level , compact->compaction->input(0, 1)->dt);
+    
+    //for full tiered compaciton 
+    compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 2)->dt);
+    compact->compaction->edit()->RemoveFile(level , compact->compaction->input(0, 3)->dt);
    
    return versions_->LogAndApplyForSSD(compact->compaction->edit(), &mutex_);
   } else {//if(level > 0 && level < config::kNumLevels - 1) {
 
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 0)->dt);
     compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 1)->dt);
-    
+        //for full tiered compaciton 
+    compact->compaction->edit()->RemoveFile(level, compact->compaction->input(0, 2)->dt);
+    compact->compaction->edit()->RemoveFile(level , compact->compaction->input(0, 3)->dt);
   
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
@@ -1465,21 +1471,33 @@ Status DBImpl::DoCompactionWork(CompactionState* compact, uint64_t smallest_snap
     assert(compact->builder == nullptr);  
     assert(compact->outfile == nullptr);
 
+    
+    int pmtables = versions_->NumLevelFiles(compact->compaction->level());
+    printf("pmtables %d\n",pmtables);
+
+    // while (pmtables > 2) {
     mutex_.Unlock();
     Status status;
     size_t readsum = 0; 
     if (!shutting_down_.load(std::memory_order_acquire)) {
     int level = compact->compaction->level();
-
+   
     CompactionState::Output out;
     out.smallest.Clear();
     out.largest.Clear();
       
-      PMtable *olddt, *newdt;
+      PMtable *olddt, *newdt, *newdt2, *newdt3;
       
-
       FileMetaData* oldfmd = compact->compaction->input(0, 0);
+           printf("oldfmd %d\n",oldfmd->number);
       FileMetaData* newfmd = compact->compaction->input(0, 1);
+            printf("newfmd %d\n",newfmd->number);
+      
+      FileMetaData* newfmd2 = compact->compaction->input(0, 2);
+            printf("newfmd2 %d\n",newfmd2->number);
+      FileMetaData* newfmd3 = compact->compaction->input(0, 3);
+            printf("newfmd3 %d\n",newfmd3->number);
+
 
       // PMtable* olddt = oldfmd->dt;
       // PMtable* newdt = newfmd->dt;
@@ -1492,29 +1510,34 @@ Status DBImpl::DoCompactionWork(CompactionState* compact, uint64_t smallest_snap
         out.number = oldfmd->number;
       }
       newdt = newfmd->dt;
-
+      newdt2 = newfmd2->dt;
+      newdt3 = newfmd3->dt;
     
-      //std::cout << "Normal Compaction in level" << level << " start" << std::endl;
-      //std::cout << "oldtable: " << olddt << " largestkey: " << olddt->table_.largest[0]->key << std::endl;
-      //std::cout << "newtable: " << newdt << " smallestkey: " << newdt->table_.smallest->key << std::endl;
-      status = olddt->Compact(newdt,smallest_snapshot);
-     //std::cout << "Normal Compaction complete" << std::endl;
 
+      status = olddt->Compact(newdt,smallest_snapshot);
+      printf("status %d\n",status.ok());
+      status = olddt->Compact(newdt2,smallest_snapshot);
+      printf("status2 %d\n",status.ok());
+      status = olddt->Compact(newdt3,smallest_snapshot);
+      printf("status3 %d\n",status.ok());
       out.dt = olddt;
 
+      printf("test\n");
       uint32_t len;
       const char* p = olddt->table_.smallest->key;
+      printf("test1\n");
       p = GetVarint32Ptr(p, p + 5, &len);
       out.smallest.DecodeFrom(Slice(p, len));
-
+       printf("test12\n");
       p = olddt->table_.largest[0]->key;
       p = GetVarint32Ptr(p, p + 5, &len);
       out.largest.DecodeFrom(Slice(p, len));
 
+      printf("out.smallest %s\n",out.smallest.DebugString().c_str());
       out.file_size = olddt->ApproximateMemoryUsage();
-    
-    // }
-    compact->outputs.push_back(out);
+
+      printf("out.file_size %d\n",out.file_size);
+      compact->outputs.push_back(out);
 
    }
   mutex_.Lock();
@@ -1554,6 +1577,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact, uint64_t smallest_snap
   VersionSet::LevelSummaryStorage tmp;
   Log(options_.info_log, "compacted to: %s", versions_->LevelSummary(&tmp));
 
+  // }
+
+  //pmtables = versions_->NumLevelFiles(compact->compaction->level());
   return status;
 
 }

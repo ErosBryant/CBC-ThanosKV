@@ -1382,7 +1382,12 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
       current_->files_[level][0]->mustquery = true;
       c->inputs_[0].push_back(current_->files_[level][0]);
       c->inputs_[0].push_back(current_->files_[level][1]);
+      // for full tiered compaction 
+      c->inputs_[0].push_back(current_->files_[level][2]);
+      c->inputs_[0].push_back(current_->files_[level][3]);
+      
     } else {
+      // for full tiered compaction 
       c->inputs_[0].push_back(current_->files_[level][0]);
       if (current_->files_[config::kNumLevels - 2].empty()) {
         c->inputs_[0].push_back(nullptr);
@@ -1400,6 +1405,7 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
 
   return c;
 }
+
 
 // Finds the largest key in a vector of files. Returns true if files it not
 // empty.
