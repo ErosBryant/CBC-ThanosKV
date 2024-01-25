@@ -841,7 +841,7 @@ Status VersionSet_sst::Recover(bool* save_manifest) {
   std::string current;
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
-    printf("asas\n");
+
     return s;
   }
   if (current.empty() || current[current.size() - 1] != '\n') {

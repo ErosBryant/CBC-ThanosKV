@@ -109,9 +109,9 @@ char* Arena::AllocateNewBlock(size_t block_bytes) {
    // printf("AllocateNewBlocksssss %p\n", result);
   } else {
     NvmNodeSizeRecord(block_bytes); 
-    //result = (char*)numa_alloc_onnode(block_bytes, nvm_node);
+    result = (char*)numa_alloc_onnode(block_bytes, nvm_node);
 
-    result = (char*) nvram::pmalloc(block_bytes);
+    //result = (char*) nvram::pmalloc(block_bytes);
     //printf("AllocateNewBlock %p\n", result);
     //printf("char* %s\n", (char*) nvram::pmalloc(block_bytes));
     memory_usage_.fetch_add(block_bytes + sizeof(char*),

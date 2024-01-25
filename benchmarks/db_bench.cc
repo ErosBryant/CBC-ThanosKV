@@ -565,13 +565,15 @@ class Benchmark {
 
       if (fresh_db) {
         if (FLAGS_use_existing_db) {
+          // 使用已有的数据库
           std::fprintf(stdout, "%-12s : skipped (--use_existing_db is true)\n",
                        name.ToString().c_str());
           method = nullptr;
         } else {
+          std::string sst_path = "/mnt/new1/Thanoskv/";
           delete db_;
           db_ = nullptr;
-          DestroyDB(FLAGS_db, Options());
+          DestroyDB(sst_path, Options());
           Open();
         }
       }

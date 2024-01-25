@@ -20,6 +20,8 @@
 #include "util/logging.h"
 
 #include "leveldb/datatable.h"
+#define FULL_TIERED_COMPACTION 0
+
 
 namespace leveldb {
 
@@ -813,8 +815,6 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     Builder builder(this, current_);
     builder.Apply(edit);
     builder.SaveTo(v);
-  
-
 
   }
   Finalize(v);
@@ -1166,9 +1166,13 @@ void VersionSet::Finalize(Version* v) {
   for (int level = 0; level < config::kNumLevels - 1; level++) {
     double score;
 
-    score = v->files_[level].size() /
-            static_cast<double>(config::kL0_CompactionTrigger);
+    score = v->files_[level].size()/4;
+    // / static_cast<double>(config::kL0_CompactionTrigger);
     v->level_score_[level] = score;
+    // if (level==2){
+    //   printf("level: %d, score: %f\n", level, score);
+    // }
+    
     if (score > best_score) {
       best_level = level;
       best_score = score;
@@ -1375,25 +1379,26 @@ Compaction* VersionSet::PickCompaction(int arrivallevel) {
   int level = arrivallevel - 1;
 
   const bool size_compaction = (current_->level_score_[level] >= 1);
-
-  if (size_compaction) {
+  
+if (size_compaction) {
     c = new Compaction(options_, level);
     if (level != config::kNumLevels - 2) {
       current_->files_[level][0]->mustquery = true;
       c->inputs_[0].push_back(current_->files_[level][0]);
       c->inputs_[0].push_back(current_->files_[level][1]);
-      // for full tiered compaction 
+
+      #if FULL_TIERED_COMPACTION
+      // 仅在 FULL_TIERED_COMPACTION 定义时编译这部分代码
       c->inputs_[0].push_back(current_->files_[level][2]);
       c->inputs_[0].push_back(current_->files_[level][3]);
-      
+      #endif
     } else {
-      // for full tiered compaction 
       c->inputs_[0].push_back(current_->files_[level][0]);
-      if (current_->files_[config::kNumLevels - 2].empty()) {
-        c->inputs_[0].push_back(nullptr);
-      } else {
-        c->inputs_[0].push_back(current_->files_[config::kNumLevels - 2][1]);
-      }
+      // if (current_->files_[level].empty()) {
+      //   c->inputs_[0].push_back(nullptr);
+      // } else {
+      //   c->inputs_[0].push_back(current_->files_[level][1]);
+      // }
     }
 
   } else {

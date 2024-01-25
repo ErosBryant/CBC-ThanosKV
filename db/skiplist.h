@@ -741,10 +741,9 @@ void SkipList<Key, Comparator>::UpdateValidKeysFromArr(const std::vector<Key>& a
 
 
 // ------------------
-
 template <typename Key, class Comparator>
 bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, SequenceNumber snum) {
-
+  wa = 0;
   Node *x = list->head_->Next(0);
   Node *y, *ypre[kMaxHeight], *xpre[kMaxHeight];
   for (int i = 0; i < kMaxHeight; i++) {
@@ -760,7 +759,7 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
     insertingnode.store(x, std::memory_order_release);
     DeleteNode(xpre, x);
     Insert(x, ypre);
-	  
+	wa += (3 * 8 * x->height);
     y = x;
     PreNext(ypre, y->height);
 
@@ -771,16 +770,13 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
       }
       first = false;
     }
-// 0b0010 : 이진수로 표현된 2
-// 0b10 : 이진수로 표현된 2
-// 0b11 : 이진수로 표현된 3
+
     // LargeTable duplication
     while (y->Next(0) != nullptr) {
       int r = NewCompare(y, y->Next(0), true, snum);
       if (r == 0b0010) {
         for (int i = 0; i < GetMaxHeight(); i++) {
-          if ((largest[i] = y->Next(0))) {
-
+          if (largest[i] = y->Next(0)) {
             largest[i] = ypre[i];
           } else {
             break;
@@ -831,7 +827,6 @@ bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, Sequenc
   list->arena_->SetTransfer();
   return true;
 }
-
 // no overlaping skiplists compaction
 template <typename Key, class Comparator>
 bool SkipList<Key, Comparator>::Compact(SkipList<Key, Comparator>* list, bool frontlink) {
