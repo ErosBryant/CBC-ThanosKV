@@ -926,7 +926,6 @@ class Duration {
     snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
     thread->stats.AddMessage(msg);
   }
-  
   void ReadMissing(ThreadState* thread) {
     ReadOptions options;
     std::string value;

@@ -981,7 +981,7 @@ void DBImpl::BackgroundCompaction(int level) {
 
         Status s = DoCompactionWork_sst(compact); //make sst compaction 
         if (!s.ok()) {
-          // printf("DoCompactionWork_sst\n");
+           printf("DoCompactionWork_sst\n");
           RecordBackgroundError(s);
         }
         CleanupCompaction_sst(compact);
@@ -1006,6 +1006,34 @@ void DBImpl::BackgroundCompaction(int level) {
     if (!s.ok()) {
       RecordBackgroundError(s);
     }
+  // }else{
+  //     if (versions_sst->NeedsCompaction()) {
+  //     Log(options_.info_log, "versions_sst->NeedsCompaction( ");
+  //       Compaction_sst* c = versions_sst->PickCompaction();
+  //       // printf("sst compaction\n");
+  //       CompactionState_sst* compact = new CompactionState_sst(c);
+  //       // printf("sst compaction2\n");
+
+  //       Status s = DoCompactionWork_sst(compact); //make sst compaction 
+  //       if (!s.ok()) {
+  //          printf("DoCompactionWork_sst\n");
+  //         RecordBackgroundError(s);
+  //       }
+  //       CleanupCompaction_sst(compact);
+  //       c->ReleaseInputs();
+  //       deleteObsoleteFiles();
+        
+
+  //       delete c;
+
+  //     if (s.ok()) {
+  //     } else if (shutting_down_.load(std::memory_order_acquire)) {
+  //       // Ignore compaction errors found during shutting down
+  //     } else {
+  //       Log(options_.info_log, "Compaction error: %s", s.ToString().c_str());
+  //     }
+
+  //  } 
   }
 }
 
@@ -1028,7 +1056,7 @@ Status DBImpl::Compactpmtable(int level) {
     // printf("sst compaction2\n");
     CleanupCompaction(compact);
     if (!s.ok()) {
-     // printf("errrrosssssssssssssssssssssssssssssssssssss\n");
+      printf("errrrosssssssssssssssssssssssssssssssssssss\n");
       RecordBackgroundError(s);
     }
     c->ReleaseInputs();
@@ -1103,7 +1131,8 @@ Status DBImpl::DoCompactionWork_sst(CompactionState_sst* compact) {
   assert(compact->builder == nullptr);
   assert(compact->outfile == nullptr);
   if (snapshots_.empty()) {
-    compact->smallest_snapshot = versions_sst->LastSequence();
+    //compact->smallest_snapshot = versions_sst->LastSequence();
+    compact->smallest_snapshot = versions_->LastSequence();
   } else {
     compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
   }
@@ -1681,9 +1710,10 @@ struct IterState {
   Version* const version GUARDED_BY(mu);
   MemTable* const mem GUARDED_BY(mu);
   MemTable* const imm GUARDED_BY(mu);
+  Version_sst* const version_sst GUARDED_BY(mu);
 
-  IterState(port::Mutex* mutex, MemTable* mem, MemTable* imm, Version* version)
-      : mu(mutex), version(version), mem(mem), imm(imm) {}
+  IterState(port::Mutex* mutex, MemTable* mem, MemTable* imm, Version* version, Version_sst* version_sst)
+      : mu(mutex), version(version), mem(mem), imm(imm), version_sst(version_sst) {}
 };
 
 static void CleanupIteratorState(void* arg1, void* arg2) {
@@ -1692,6 +1722,7 @@ static void CleanupIteratorState(void* arg1, void* arg2) {
   state->mem->Unref();
   if (state->imm != nullptr) state->imm->Unref();
   state->version->Unref();
+  if (state->version_sst != nullptr) state->version_sst->Unref();
   state->mu->Unlock();
   delete state;
 }
@@ -1716,20 +1747,28 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
 
   versions_->current()->AddIterators(options, &list);
   
- Index* index = versions_sst->options()->index;
+  if (adgMod::KV_S==0){
+     Index* index = versions_sst->options()->index;
   // [B-tree] 
-if (versions_sst->current()->NumFiles(0) > 0 ||versions_sst->current()->NumFiles(1) > 0) {
+  if (versions_sst->current()->NumFiles(0) > 0 ||versions_sst->current()->NumFiles(1) > 0) {
     
-     //list.push_back(index->NewIterator(options, table_cache_));
-      versions_sst->current()->AddIterators(options, &list);
+    list.push_back(index->NewIterator(options, table_cache_));
   }
+  }
+
+    
+      versions_sst->current()->AddIterators(options, &list);
+      versions_sst->current()->Ref();
+  // }
 
   Iterator* internal_iter =
       NewMergingIterator(&internal_comparator_, &list[0], list.size());
   versions_->current()->Ref();
 
-  IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
+  IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current(),versions_sst->current());
+  
   internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
+ 
   *seed = ++seed_;
   mutex_.Unlock();
   return internal_iter;

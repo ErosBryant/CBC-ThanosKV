@@ -200,7 +200,7 @@ class Version_sst::LevelFileNumIterator : public Iterator {
 
         Slice key() const {
             assert(Valid());
-            printf("key %s\n", (*flist_)[index_]->largest.Encode().ToString().c_str());
+      
             return (*flist_)[index_]->largest.Encode();
         }
 
