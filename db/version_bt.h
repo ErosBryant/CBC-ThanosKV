@@ -18,11 +18,16 @@
 #include <map>
 #include <set>
 #include <vector>
+//#include "mod/learned_index.h"
+#include "mod/Vlog.h"
 
 #include "db/dbformat.h"
 #include "db/version_edit.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+
+
+
 
 namespace leveldb {
 
@@ -38,6 +43,8 @@ class TableCache;
 class Version_sst;
 class VersionSet_sst;
 class WritableFile;
+class LearnedIndexData;
+
 
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
@@ -72,8 +79,10 @@ class Version_sst {
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
- Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
+  Status Get(const ReadOptions&, const LookupKey& key, std::string* val);
 
+  Status Get(const ReadOptions&, const LookupKey& key, std::string* val, GetStats* stats);
+  
   // Adds "stats" into the current state.  Returns true if a new
   // Compaction_sst may need to be triggered, false otherwise.
   // REQUIRES: lock is held
@@ -113,9 +122,13 @@ class Version_sst {
   // Return a human readable string that describes this version_sst's contents.
   std::string DebugString() const;
 
+  // Fill file model data
+ bool FillData(const ReadOptions& options, FileMetaData* meta, adgMod::LearnedIndexData* data);
+
  private:
   friend class Compaction_sst;
   friend class VersionSet_sst;
+  friend class adgMod::LearnedIndexData;
 
   class LevelFileNumIterator;
 
@@ -277,6 +290,8 @@ class VersionSet_sst {
 
  private:
   class Builder;
+  
+  //friend class adgMod::LearnedIndexData;
 
   friend class Compaction_sst;
   friend class Version_sst;

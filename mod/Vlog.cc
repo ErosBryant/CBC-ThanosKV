@@ -12,28 +12,25 @@ using std::string;
 
 
 
+// const int buffer_size_max = 300 * 1024;
 const int buffer_size_max = 300 * 1024;
 
 namespace adgMod {
 
-
-
-VLog::VLog(const std::string& vlog_name) :
-    writer(nullptr),
-    reader(nullptr) {
+VLog::VLog(const std::string& vlog_name) : writer(nullptr), reader(nullptr) {
     adgMod::env->NewWritableFile(vlog_name, &writer);
-
-    // printf("env: %p\n", adgMod::env);
-    // printf("env->NewWritableFile: %p\n", writer);
     adgMod::env->NewRandomAccessFile(vlog_name, &reader);
-    // printf("env->NewRandomAccessFile: %p\n", reader);
-    
     buffer.reserve(buffer_size_max * 2);
+
     struct ::stat file_stat;
-    ::stat(vlog_name.c_str(), &file_stat);
+    if (::stat(vlog_name.c_str(), &file_stat) == -1) {
+        std::cerr << "Error calling stat: " << std::strerror(errno) << std::endl;
+        // 处理错误，例如设置 vlog_size 为 0 或返回错误
+        vlog_size = 0;
+        return;
+    }
     vlog_size = file_stat.st_size;
 }
-
 uint64_t VLog::AddRecord(const Slice& key, const Slice& value) {
     PutLengthPrefixedSlice(&buffer, key);
     PutVarint32(&buffer, value.size());
@@ -45,48 +42,29 @@ uint64_t VLog::AddRecord(const Slice& key, const Slice& value) {
 }
 
 string VLog::ReadRecord(uint64_t address, uint32_t size) {
-
+    // printf("2\n");
+    // printf("ssd address %d\n", address);
+    // printf("ssd vlog_size %d\n", vlog_size);
     if (address >= vlog_size) return string(buffer.c_str() + address - vlog_size, size);
 
-    if (address + size > vlog_size) {
-      printf("yue jie le \n");
-}
-
     char* scratch = new char[size];
+    // printf("size %d\n", size);
     Slice value;
-/*
-    printf("ReadRecord address: %lu, size: %u\n", address, size);
-    printf("vlog_size: %lu\n", vlog_size);
-    printf("buffer size: %lu\n", buffer.size());*/
+    // printf("ssd address1111111111 %d\n", address);
     reader->Read(address, size, &value, scratch);
-    /*printf("value: %d\n", *(uint8_t *)(value.data()));
-    printf("scratch: %d\n", *(uint8_t*)scratch);*/
-   //  printf("-------------ss-------\n");
+    // printf("ssd address2222222222 %d\n", address);
     string result(value.data(), value.size());
     delete[] scratch;
+    // printf("ssd address3333333333 %d\n", address);
     return result;
 }
 
-uint64_t VLog::getvlog_size(){
-    return vlog_size;
-}
-
-int VLog::getvlog_buffer() {
-    return buffer.size();
-}
-
 void VLog::Flush() {
-
     if (buffer.empty()) return;
 
-
     vlog_size += buffer.size();
-
-
     writer->Append(buffer);
-
     writer->Flush();
-
     buffer.clear();
     buffer.reserve(buffer_size_max * 2);
 }
@@ -102,7 +80,12 @@ VLog::~VLog() {
 
 
 
-
+uint64_t VLog::getvlog_size(){
+    return vlog_size;
 }
 
+int VLog::getvlog_buffer() {
+    return buffer.size();
+}
 
+}

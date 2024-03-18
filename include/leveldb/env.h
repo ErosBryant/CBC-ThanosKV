@@ -48,6 +48,7 @@ class RandomAccessFile;
 class SequentialFile;
 class Slice;
 class WritableFile;
+class FileMetaData;
 
 class LEVELDB_EXPORT Env {
  public:
@@ -219,6 +220,10 @@ class LEVELDB_EXPORT Env {
 
   // Sleep/delay the thread for the prescribed number of micro-seconds.
   virtual void SleepForMicroseconds(int micros) = 0;
+
+  // for plr
+  virtual void PrepareLearning(int level, FileMetaData* meta) {};
+  virtual void forlearning() {};
 };
 
 // A file abstraction for reading sequentially through a file
@@ -384,6 +389,7 @@ class LEVELDB_EXPORT EnvWrapper : public Env {
     return target_->LockFile(f, l);
   }
   Status UnlockFile(FileLock* l) override { return target_->UnlockFile(l); }
+  
   void Schedule(void (*f)(void*, int), void* a, int l) override {
     return target_->Schedule(f, a, l);
   }

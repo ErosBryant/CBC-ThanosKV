@@ -12,6 +12,8 @@ using namespace leveldb;
 
 namespace adgMod {
 
+class LearnedIndexData;
+
 class VLog {
 private:
     WritableFile* writer;
@@ -31,9 +33,6 @@ public:
     void Sync();
     ~VLog();
 };
-
-
-
 
 
 }

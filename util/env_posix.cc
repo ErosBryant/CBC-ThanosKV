@@ -31,9 +31,12 @@
 #include "leveldb/slice.h"
 #include "leveldb/status.h"
 #include "port/port.h"
+#include "mutexlock.h"
 #include "port/thread_annotations.h"
 #include "util/env_posix_test_helper.h"
 #include "util/posix_logger.h"
+#include "mod/util.h"
+#include "mod/learned_index.h"
 
 namespace leveldb {
 
@@ -112,6 +115,7 @@ class PosixSequentialFile final : public SequentialFile {
   ~PosixSequentialFile() override { close(fd_); }
 
   Status Read(size_t n, Slice* result, char* scratch) override {
+
     Status status;
     while (true) {
       ::ssize_t read_size = ::read(fd_, scratch, n);
@@ -170,6 +174,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
 
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
+                // printf("offset:_read %ld, n: %d\n", offset, n);
     int fd = fd_;
     if (!has_permanent_fd_) {
       fd = ::open(filename_.c_str(), O_RDONLY | kOpenBaseFlags);
@@ -184,6 +189,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
     ssize_t read_size = ::pread(fd, scratch, n, static_cast<off_t>(offset));
     *result = Slice(scratch, (read_size < 0) ? 0 : read_size);
     if (read_size < 0) {
+      
       // An error: return a non-ok status.
       status = PosixError(filename_, errno);
     }
@@ -192,6 +198,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
       assert(fd != fd_);
       ::close(fd);
     }
+    // printf("result: %s\n", result->data());
     return status;
   }
 
@@ -230,12 +237,14 @@ class PosixMmapReadableFile final : public RandomAccessFile {
 
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
+  //  printf("offset:_mmap %ld, n: %d\n", offset, n);
     if (offset + n > length_) {
       *result = Slice();
       return PosixError(filename_, EINVAL);
     }
 
     *result = Slice(mmap_base_ + offset, n);
+    //printf("result: %s\n", result->data());
     return Status::OK();
   }
 
@@ -509,9 +518,9 @@ class PosixEnv : public Env {
     return Status::OK();
   }
 
-    Status NewRandomAccessFile(const std::string& filename,
+
+  Status NewRandomAccessFile(const std::string& filename,
                              RandomAccessFile** result) override {
-    //printf("filename: %s\n", filename.c_str());
 
     *result = nullptr;
     int fd = ::open(filename.c_str(), O_RDONLY);
@@ -545,19 +554,22 @@ class PosixEnv : public Env {
 
   }
 
+
   Status NewWritableFile(const std::string& filename,
                          WritableFile** result) override {
-    //printf("wfilename: %s\n", filename.c_str());                      
-    int fd = ::open(filename.c_str(),
-                    O_TRUNC | O_WRONLY | O_CREAT | kOpenBaseFlags, 0644);
+    int fd;
+    if (filename.find("vlog") != std::string::npos) {
+        fd = ::open(filename.c_str(), O_RDWR | O_APPEND | O_CREAT, 0644);
+    } else {
+        fd = ::open(filename.c_str(), O_TRUNC | O_WRONLY | O_CREAT, 0644);
+    }
+
     if (fd < 0) {
-     // printf("fd < 0\n");
       *result = nullptr;
       return PosixError(filename, errno);
     }
 
     *result = new PosixWritableFile(filename, fd);
-   // printf("result: %p\n", *result);
     return Status::OK();
   }
 
@@ -680,8 +692,7 @@ class PosixEnv : public Env {
       *result = env;
     } else {
       char buf[100];
-      std::snprintf(buf, sizeof(buf), "/tmp/leveldbtest-%d",
-                    static_cast<int>(::geteuid()));
+      std::snprintf(buf, sizeof(buf), "/mnt/new1/Thanoskv");
       // std::snprintf(buf, sizeof(buf), "/mnt/pmemdir/leveldb-%d",
       //               static_cast<int>(::geteuid()));
       *result = buf;
@@ -713,6 +724,7 @@ class PosixEnv : public Env {
     }
   }
 
+
   uint64_t NowMicros() override {
     static constexpr uint64_t kUsecondsPerSecond = 1000000;
     struct ::timeval tv;
@@ -723,8 +735,67 @@ class PosixEnv : public Env {
   void SleepForMicroseconds(int micros) override {
     std::this_thread::sleep_for(std::chrono::microseconds(micros));
   }
+  
+  void forlearning() {
+    printf("forlearning\n");
+    while (learning_prepare.empty()) {
+      preparing_queue_cv.Wait();
+    }
+   // SleepForMicroseconds(1);
+  }
+
+// for sst file learning
+// examine items in the learning_prepare queue to decide which ones to learn
+  void PrepareLearn() {
+    
+    prepare_queue_mutex.Lock();
+
+      while (true) {
+        while (learning_prepare.empty()) {
+          preparing_queue_cv.Wait();
+        }
+
+        while (!learning_prepare.empty()) {
+          auto front = learning_prepare.front();
+          int level = front.first;
+          // printf("level: %d\n", level);
+          FileMetaData* meta = front.second;
+          // printf("meta: %p\n", meta);
+          adgMod::LearnedIndexData* model = adgMod::file_data->GetModel(meta->number);
+          // printf("model: %p\n", model);
+          prepare_queue_mutex.Unlock();
+          adgMod::LearnedIndexData::FileLearn(new adgMod::MetaAndSelf{nullptr, 0, meta, model, level});
+          // printf("prepare learning file %ld\n", meta->number);
+          prepare_queue_mutex.Lock();
+          learning_prepare.pop();
+        }
+       // SleepForMicroseconds(10000);
+      }
+  }
+
+  static void PrepareLearnEntryPoint(PosixEnv* env) {
+    env->PrepareLearn();
+  }
+
+  void PrepareLearning(int level, FileMetaData* meta) {
+    if (adgMod::KV_S != 1) return;
+    MutexLock guard(&prepare_queue_mutex);
+    if (!preparing_thread_started) {
+          preparing_thread_started = true;
+          std::thread background_thread(PosixEnv::PrepareLearnEntryPoint, this);
+          background_thread.detach();
+  }
+    
+    if (learning_prepare.empty()) preparing_queue_cv.Signal();
+    learning_prepare.emplace(std::make_pair(level, meta));
+    // printf("done learning file %ld\n", meta->number);
+  }
+
 
  private:
+
+ friend class TableCache;
+ 
   void BackgroundThreadMain(int level);
 
   static void BackgroundThreadEntryPoint(PosixEnv* env, int level) {
@@ -752,6 +823,16 @@ class PosixEnv : public Env {
 
   std::queue<BackgroundWorkItem> background_work_queue_[config::kNumLevels]
       GUARDED_BY(background_work_mutex_);
+
+
+  //for sst file learning
+  typedef std::pair<int, FileMetaData*> LearnParam;
+  port::Mutex prepare_queue_mutex;
+  std::queue<LearnParam> learning_prepare;
+  bool preparing_thread_started;
+  port::CondVar preparing_queue_cv;
+
+
 
   PosixLockTable locks_;  // Thread-safe.
   Limiter mmap_limiter_;  // Thread-safe.
@@ -785,6 +866,8 @@ PosixEnv::PosixEnv()
     : background_work_cv_(&background_work_mutex_),
       //started_background_thread_(false),
       mmap_limiter_(MaxMmaps()),
+      preparing_thread_started(false),
+      preparing_queue_cv(&prepare_queue_mutex),
       fd_limiter_(MaxOpenFiles()) {
   
   for (int i = 0; i < config::kNumLevels; i++) {
@@ -795,6 +878,7 @@ PosixEnv::PosixEnv()
 void PosixEnv::Schedule(
     void (*background_work_function)(void* background_work_arg, int level),
     void* background_work_arg, int level) {
+      
   background_work_mutex_.Lock();
 
   // Start the background thread, if we haven't done so already.

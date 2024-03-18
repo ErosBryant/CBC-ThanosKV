@@ -9,6 +9,7 @@
 #include <deque>
 #include <set>
 #include <string>
+//#include "mod/learned_index.h"
 #include <mod/Vlog.h>
 
 #include "db/dbformat.h"
@@ -19,9 +20,8 @@
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
-
-
 #include "leveldb/datatable.h"
+
 namespace leveldb {
 
 class MemTable;
@@ -83,6 +83,10 @@ class DBImpl : public DB {
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.
   void RecordReadSample(Slice key);
+
+
+  Version_sst* GetCurrentVersion();
+  void ReturnCurrentVersion(Version_sst* version);
 
  private:
   friend class DB;
@@ -284,8 +288,11 @@ void HandleOverflowToSSD() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   //n for read pmtable
   VersionSet* const versions_ GUARDED_BY(mutex_);
   // for read sstable
+  public:
   VersionSet_sst* const versions_sst GUARDED_BY(mutex_);
+  private:
   CompactionStattossd _stats_ [config::kNumLevels] GUARDED_BY(mutex_);
+
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

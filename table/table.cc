@@ -14,29 +14,40 @@
 #include "table/format.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#include "mod/learned_index.h"
+#include "db/version_set.h"
+#include "mod/util.h"
+
 #ifdef PERF_LOG
 #include "util/perf_log.h"
 #endif
 
 namespace leveldb {
 
-struct Table::Rep {
-  ~Rep() {
+// struct Table::Rep {
+//   ~Rep() {
+//     delete filter;
+//     delete [] filter_data;
+//     delete index_block;
+//   }
+
+//   Options options;
+//   Status status;
+//   RandomAccessFile* file;
+//   uint64_t cache_id;
+//   FilterBlockReader* filter;
+//   const char* filter_data;
+
+//   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
+//   Block* index_block;
+// };
+
+Table::Rep::~Rep() {
     delete filter;
-    delete [] filter_data;
+    delete[] filter_data;
     delete index_block;
-  }
+}
 
-  Options options;
-  Status status;
-  RandomAccessFile* file;
-  uint64_t cache_id;
-  FilterBlockReader* filter;
-  const char* filter_data;
-
-  BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
-  Block* index_block;
-};
 
 Status Table::Open(const Options& options,
                    RandomAccessFile* file,
@@ -104,6 +115,7 @@ void Table::ReadMeta(const Footer& footer) {
   }
   Block* meta = new Block(contents);
 
+  printf("filter name: %s\n", rep_->options.filter_policy->Name());
   Iterator* iter = meta->NewIterator(BytewiseComparator());
   std::string key = "filter.";
   key.append(rep_->options.filter_policy->Name());
@@ -137,6 +149,53 @@ void Table::ReadFilter(const Slice& filter_handle_value) {
   }
   rep_->filter = new FilterBlockReader(rep_->options.filter_policy, block.data);
 }
+
+
+void Table::FillData(const ReadOptions& options, adgMod::LearnedIndexData* data) {
+    if (data->filled) return;
+
+  Status status;
+  Block::Iter* index_iter = dynamic_cast<Block::Iter*>(rep_->index_block->NewIterator(rep_->options.comparator));
+  //uint64_t num_points = 0;
+  for (uint32_t i = 0; i < index_iter->num_restarts_; ++i) {
+    // printf("index_iter->num_restarts_: %d\n", index_iter->num_restarts_);
+    index_iter->SeekToRestartPoint(i);
+    index_iter->ParseNextKey();
+    assert(index_iter->Valid());
+    Block::Iter* block_iter = dynamic_cast<Block::Iter*>(BlockReader(this, options, index_iter->value()));
+    // printf("block_iter->restarts_: %d\n", block_iter->restarts_);
+    // printf("index_iter->value().size(): %d\n", index_iter->value().size());
+    
+    ParsedInternalKey parsed_key;
+    int num_entries_this_block = 0;
+    for (block_iter->SeekToRestartPoint(0); block_iter->ParseNextKey(); ++num_entries_this_block) {
+        ParseInternalKey(block_iter->key(), &parsed_key);
+        data->string_keys.emplace_back(parsed_key.user_key.data(), parsed_key.user_key.size());
+    }
+    //num_points += num_entries_this_block;
+
+    if (!adgMod::block_num_entries_recorded) {
+        adgMod::block_num_entries = num_entries_this_block;
+        adgMod::block_num_entries_recorded = true;
+        adgMod::entry_size = block_iter->restarts_ / num_entries_this_block;
+        // printf("entry size__1: %d\n", adgMod::entry_size);
+        BlockHandle temp;
+        Slice temp_slice = index_iter->value();
+        temp.DecodeFrom(&temp_slice);
+        adgMod::block_size = temp.size() + kBlockTrailerSize;
+    }
+
+    uint64_t current_total = data->num_entries_accumulated.NumEntries();
+    if (!data->Learned()) {
+        data->num_entries_accumulated.Add(current_total + num_entries_this_block, std::string(parsed_key.user_key.data(), parsed_key.user_key.size()));
+    }
+    delete block_iter;
+  }
+  //data->num_entries_accumulated.Add(num_points, "");
+  data->filled = true;
+  delete index_iter;
+}
+
 
 Table::~Table() {
   delete rep_;
@@ -264,6 +323,51 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator),
       &Table::BlockReader, const_cast<Table*>(this), options);
+}
+
+// learned index
+Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
+                          void (*handle_result)(void*, const Slice&, const Slice&), int level,
+                          FileMetaData* meta, uint64_t lower, uint64_t upper, bool learned, Version_sst* version) {
+
+  Status s;
+  Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
+  ParsedInternalKey parsed_key;
+  ParseInternalKey(k, &parsed_key);
+
+
+
+    iiter->Seek(k);
+
+
+    if (iiter->Valid()) {
+
+      Slice handle_value = iiter->value();
+      FilterBlockReader* filter = rep_->filter;
+      BlockHandle handle;
+      if (filter != nullptr && handle.DecodeFrom(&handle_value).ok() &&
+          !filter->KeyMayMatch(handle.offset(), k)) {
+
+
+        // Not found
+      } else {
+
+        Iterator* block_iter = BlockReader(this, options, iiter->value());
+
+        block_iter->Seek(k);
+
+        if (block_iter->Valid()) {
+          (*handle_result)(arg, block_iter->key(), block_iter->value());
+        }
+        s = block_iter->status();
+        delete block_iter;
+      }
+    }
+    if (s.ok()) {
+      s = iiter->status();
+    }
+    delete iiter;
+    return s;
 }
 
 Status Table::InternalGet(const ReadOptions& options, const Slice& k,

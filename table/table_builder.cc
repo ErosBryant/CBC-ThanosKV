@@ -16,6 +16,7 @@
 #include "util/crc32c.h"
 #include "leveldb/index.h"
 #include "db/dbformat.h"
+#include "mod/util.h"
 
 namespace leveldb {
 
@@ -108,14 +109,18 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   if (r->num_entries > 0) {
     assert(r->options.comparator->Compare(key, Slice(r->last_key)) > 0);
   }
-  // create index meta for new block
+  if(adgMod::KV_S==0){
+    // [B-tree] Added
   if (r->data_block.empty()) {
     r->index_meta = std::make_shared<IndexMeta>(r->offset, 0, r->fnumber);
   }
-
+  }
+  
   if (r->pending_index_entry) {
     assert(r->data_block.empty());
-    r->options.comparator->FindShortestSeparator(&r->last_key, key);
+    if(adgMod::KV_S==0){
+      r->options.comparator->FindShortestSeparator(&r->last_key, key);
+    }
     std::string handle_encoding;
     r->pending_handle.EncodeTo(&handle_encoding);
     r->index_block.Add(r->last_key, Slice(handle_encoding));
@@ -129,13 +134,17 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   r->last_key.assign(key.data(), key.size());
   r->num_entries++;
   r->data_block.Add(key, value);
-  // [B-tree] Added
+
+  if (adgMod::KV_S==0){
+  //     [B-tree] Added
   // add to index queue block meta
   KeyAndMeta key_meta;
   key_meta.key = fast_atoi(ExtractUserKey(key));
   key_meta.meta = r->index_meta;
   //printf("TableBuilder::Add() index_queue size %lu\n", r->indexx_queue.size());
   r->indexx_queue.push_back(key_meta);
+  }
+
 
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
@@ -203,9 +212,13 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
   Rep* r = rep_;
   handle->set_offset(r->offset);
   handle->set_size(block_contents.size());
+
+  if (adgMod::KV_S==0){
+    // [B-tree] Added
   // update block size in index meta
   if (is_data_block) {
     r->index_meta->size = block_contents.size();
+  }
   }
   r->status = r->file->Append(block_contents);
   if (r->status.ok()) {
@@ -266,7 +279,7 @@ Status TableBuilder::Finish() {
     }
     WriteBlock(&r->index_block, &index_block_handle);
   }
-
+    // printf("TableBuilder::Finish() index_queue3 size %lu\n", r->indexx_queue.size());
   // Write footer
   if (ok()) {
     Footer footer;
@@ -279,18 +292,21 @@ Status TableBuilder::Finish() {
       r->offset += footer_encoding.size();
     }
   }
-  if (r->status.ok()) {
+  if (adgMod::KV_S==0){
+    if (r->status.ok()) {
     r->status = r->file->Sync();
   }
   if (r->status.ok()) {
     r->status = r->file->Close();
   }
   // [B-tree] Added
-
-  
-   r->index->AddQueue(r->indexx_queue);
+  // printf("TableBuilder::Finish() index_queue size %lu\n", r->indexx_queue.size());
+  r->index->AddQueue(r->indexx_queue);
+  // printf("TableBuilder::Finish() index_queue22 size %lu\n", r->indexx_queue.size());
 
   assert(r->indexx_queue.empty());
+  }
+
   return r->status;
 }
 

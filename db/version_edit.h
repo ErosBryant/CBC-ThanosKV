@@ -14,6 +14,7 @@
 
 #include "db/dbformat.h"
 #include "leveldb/datatable.h"
+//#include "mod/learned_index.h"
 
 namespace leveldb {
 
@@ -132,6 +133,7 @@ class VersionEdit {
  private:
   friend class VersionSet;
   friend class VersionSet_sst;
+  friend class DBImpl;
 
   typedef std::set<std::pair<int, PMtable*>> DeletedFileSet;
   typedef std::set<std::pair<int, uint64_t> > DeletedFileSet_SST;

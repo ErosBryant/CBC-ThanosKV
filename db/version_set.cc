@@ -353,7 +353,8 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
 
 // [PM Skiplist] Added
 bool Version::Get(const ReadOptions& options, const LookupKey& k,
-                    std::string* value, GetStats* stats) {
+                    std::string* value, GetStats* stats,Status* s) {
+                     
   stats->seek_file = nullptr;
   stats->seek_file_level = -1;
 
@@ -412,6 +413,8 @@ bool Version::Get(const ReadOptions& options, const LookupKey& k,
 
   ForEachOverlapping(state.saver.user_key, state.ikey, &state, &State::Match);
 
+  state.found ? s = new leveldb::Status(Status::OK()) : s = new leveldb::Status(Status::NotFound(Slice()));
+  // printf("s %d\n", s->ok());
   return state.found ? true : false;
 }
 

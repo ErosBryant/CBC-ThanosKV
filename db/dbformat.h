@@ -41,7 +41,7 @@ static constexpr int ScanCheckMinFileNumber = 8;
 
 
 
-static const int kNumLevels = 6 ;
+static const int kNumLevels = 4 ;
 // for sst
 static const int kNumLevels_sst = 7 ;
 // Level-0 compaction is started when we hit this many files.
@@ -237,7 +237,7 @@ class LookupKey {
   const char* start_;
   const char* kstart_;
   const char* end_;
-  char space_[200];  // Avoid allocation for short keys
+  char space_[32];  // Avoid allocation for short keys
 };
 
 inline LookupKey::~LookupKey() {

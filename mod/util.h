@@ -1,6 +1,4 @@
-//
-// Created by daiyi on 2020/02/02.
-// a collection of global variables and flags/states/parameters
+
 
 #include <cstdint>
 #include <cstdlib>
@@ -22,6 +20,10 @@ using leveldb::Slice;
 
 namespace adgMod {
 
+    class FileStats;
+    class FileLearnedIndexData;
+    class LearnedIndexData;
+
     //vlog =1 
     extern bool KV_S;
 
@@ -34,16 +36,25 @@ namespace adgMod {
     extern leveldb::DBImpl* db;
     extern leveldb::ReadOptions read_options;
     extern leveldb::WriteOptions write_options;
-
+    extern uint32_t file_model_error;
     extern bool fresh_write;
-
-
+    extern int file_allowed_seek;
+    uint64_t SliceToInteger(const Slice& slice);
+    extern FileLearnedIndexData* file_data;
     int compare(const Slice& slice, const string& string);
     bool operator<(const Slice& slice, const string& string);
     bool operator>(const Slice& slice, const string& string);
     bool operator<=(const Slice& slice, const string& string);
     bool operator>=(const Slice& slice, const string& string);
     uint64_t get_time_difference(timespec start, timespec stop);
+
+    extern int level_allowed_seek;
+    extern float reference_frequency;
+    extern bool block_num_entries_recorded;
+    extern uint64_t block_num_entries;
+    extern uint64_t block_size;
+    extern uint64_t entry_size;
+
 
 }
 

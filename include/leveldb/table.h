@@ -5,10 +5,13 @@
 #ifndef STORAGE_LEVELDB_INCLUDE_TABLE_H_
 #define STORAGE_LEVELDB_INCLUDE_TABLE_H_
 
-#include <cstdint>
+#include <stdint.h>
+#include <db/version_edit.h>
+#include <table/format.h>
 
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
+#include "mod/learned_index.h"
 
 namespace leveldb {
 
@@ -19,6 +22,7 @@ struct Options;
 class RandomAccessFile;
 struct ReadOptions;
 class TableCache;
+class FilterBlockReader;
 
 // A Table is a sorted map from strings to strings.  Tables are
 // immutable and persistent.  A Table may be safely accessed from
@@ -50,7 +54,6 @@ class LEVELDB_EXPORT Table {
   // call one of the Seek methods on the iterator before using it).
   Iterator* NewIterator(const ReadOptions&) const;
 
-  Iterator* BlockIterator(const ReadOptions&, const BlockHandle&);
   // Given a key, return an approximate byte offset in the file where
   // the data for that key begins (or would begin if the key were
   // present in the file).  The returned value is in terms of file
@@ -59,10 +62,26 @@ class LEVELDB_EXPORT Table {
   // be close to the file length.
   uint64_t ApproximateOffsetOf(const Slice& key) const;
 
-
+ Iterator* BlockIterator(const ReadOptions&, const BlockHandle&);
+ 
  private:
   friend class TableCache;
-  struct Rep;
+
+
+    struct Rep {
+
+        ~Rep();
+
+        Options options;
+        Status status;
+        RandomAccessFile* file;
+        uint64_t cache_id;
+        FilterBlockReader* filter;
+        const char* filter_data;
+
+        BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
+        Block* index_block;
+    };
 
   static Iterator* BlockReader(void*, const ReadOptions&, const Slice&);
 
@@ -71,12 +90,22 @@ class LEVELDB_EXPORT Table {
   // Calls (*handle_result)(arg, ...) with the entry found after a call
   // to Seek(key).  May not make such a call if filter policy says
   // that key is not present.
+  // Status InternalGet(const ReadOptions&, const Slice& key, void* arg,
+  //                    void (*handle_result)(void* arg, const Slice& k, const Slice& v), int level,
+  //                    FileMetaData* meta = nullptr, uint64_t lower = 0, uint64_t upper = 0, bool learned = false, Version* version = nullptr);
+
   Status InternalGet(const ReadOptions&, const Slice& key, void* arg,
                      void (*handle_result)(void* arg, const Slice& k,
                                            const Slice& v));
 
+  Status InternalGet(const ReadOptions&, const Slice& key, void* arg,
+                     void (*handle_result)(void* arg, const Slice& k, const Slice& v), int level,
+                     FileMetaData* meta = nullptr, uint64_t lower = 0, uint64_t upper = 0, bool learned = false, Version_sst* version = nullptr);
+
   void ReadMeta(const Footer& footer);
   void ReadFilter(const Slice& filter_handle_value);
+
+  void FillData(const ReadOptions& options, adgMod::LearnedIndexData* data);
 
   Rep* const rep_;
 };

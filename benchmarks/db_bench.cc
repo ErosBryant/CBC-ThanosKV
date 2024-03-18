@@ -248,8 +248,8 @@ class Stats {
       double micros = now - last_op_finish_;
       hist_.Add(micros);
       if (micros > 20000) {
-        std::fprintf(stderr, "long op: %.1f micros%30s\r", micros, "");
-        std::fflush(stderr);
+        fprintf(stderr, "long op: %.1f micros%30s\r", micros, "");
+        fflush(stderr);
       }
       last_op_finish_ = now;
     }
@@ -270,11 +270,10 @@ class Stats {
         next_report_ += 50000;
       else
         next_report_ += 100000;
-      std::fprintf(stderr, "... finished %d ops%30s\r", done_, "");
-      std::fflush(stderr);
+      fprintf(stderr, "... finished %d ops%30s\r", done_, "");
+      fflush(stderr);
     }
   }
-
   void AddBytes(int64_t n) { bytes_ += n; }
 
   void Report(const Slice& name) {
@@ -741,8 +740,9 @@ class Benchmark {
     options.nvm_node = FLAGS_nvm_node;
     options.nvm_next_node = FLAGS_nvm_next_node;
     options.index = CreateBtreeIndex();
-  
+   
     Status s = DB::Open(options, FLAGS_db, &db_);
+
     if (!s.ok()) {
       std::fprintf(stderr, "open error: %s\n", s.ToString().c_str());
       std::exit(1);
@@ -865,6 +865,8 @@ class Duration {
         const int k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
         char key[100];
         snprintf(key, sizeof(key), "%016d", k);
+        // printf("key: %s\n", key);
+        // printf("value: %d\n", value_size_);
         //batch.Put(key, gen.Generate(value_size_));
         db_->Put(write_options_, key, gen.Generate(value_size_));
         bytes += value_size_ + strlen(key);
@@ -879,23 +881,18 @@ class Duration {
     thread->stats.AddBytes(bytes);
   }
 
+
   void ReadSequential(ThreadState* thread) {
-  
     Iterator* iter = db_->NewIterator(ReadOptions());
     int i = 0;
     int64_t bytes = 0;
-    std::string value;
     for (iter->SeekToFirst(); i < reads_ && iter->Valid(); iter->Next()) {
       bytes += iter->key().size() + iter->value().size();
-      value = iter->value().ToString();
       thread->stats.FinishedSingleOp();
       ++i;
     }
     delete iter;
     thread->stats.AddBytes(bytes);
-    char msg[100];
-    snprintf(msg, sizeof(msg), "(%d of reads)", i);
-    thread->stats.AddMessage(msg);
   }
 
 
@@ -916,23 +913,20 @@ class Duration {
     ReadOptions options;
     std::string value;
     int found = 0;
-	int64_t bytes = 0;
     for (int i = 0; i < reads_; i++) {
       char key[100];
       const int k = thread->rand.Next() % FLAGS_num;
-      std::snprintf(key, sizeof(key), "%016d", k);
+      snprintf(key, sizeof(key), "%016d", k);
       if (db_->Get(options, key, &value).ok()) {
-		bytes += strlen(key) + value.size();
         found++;
       }
       thread->stats.FinishedSingleOp();
     }
     char msg[100];
-    std::snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
-	  thread->stats.AddBytes(bytes);
+    snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
     thread->stats.AddMessage(msg);
   }
-
+  
   void ReadMissing(ThreadState* thread) {
     ReadOptions options;
     std::string value;

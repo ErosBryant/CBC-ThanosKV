@@ -7,16 +7,20 @@
 namespace leveldb {
 
 void EncodeFixed32(char* dst, uint32_t value) {
-
+  // if (port::kLittleEndian) {
+  //   memcpy(dst, &value, sizeof(value));
+  // } else {
     dst[0] = value & 0xff;
     dst[1] = (value >> 8) & 0xff;
     dst[2] = (value >> 16) & 0xff;
     dst[3] = (value >> 24) & 0xff;
-
+  // }
 }
 
 void EncodeFixed64(char* dst, uint64_t value) {
-
+  // if (port::kLittleEndian) {
+  //   memcpy(dst, &value, sizeof(value));
+  // } else {
     dst[0] = value & 0xff;
     dst[1] = (value >> 8) & 0xff;
     dst[2] = (value >> 16) & 0xff;
@@ -25,7 +29,7 @@ void EncodeFixed64(char* dst, uint64_t value) {
     dst[5] = (value >> 40) & 0xff;
     dst[6] = (value >> 48) & 0xff;
     dst[7] = (value >> 56) & 0xff;
-  
+  // }
 }
 
 void PutFixed32(std::string* dst, uint32_t value) {

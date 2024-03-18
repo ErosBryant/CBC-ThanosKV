@@ -28,6 +28,7 @@ Status BuildTable(const std::string& dbname,
   iter->SeekToFirst();
 
   std::string fname = TableFileName(dbname, meta->number);
+  // printf("ssd meta->number %d\n", meta->number);
   if (iter->Valid()) {
     WritableFile* file;
     s = env->NewWritableFile(fname, &file);
@@ -37,27 +38,34 @@ Status BuildTable(const std::string& dbname,
     TableBuilder* builder = new TableBuilder(options, file, meta->number);
     meta->smallest.DecodeFrom(iter->key());
     Slice prev_key;
+    Slice key;
     // [B-tree] Added
     for (; iter->Valid(); iter->Next()) {
-      Slice key = iter->key();
+      if (adgMod::KV_S==1){
+      key = iter->key();
       Slice value = iter->value();
-
-      //uint64_t value_address = adgMod::db->vlog->AddRecord(key, value);
-      // char buffer[sizeof(uint64_t) + sizeof(uint32_t)];
-      // EncodeFixed64(buffer, value_address);
-      // EncodeFixed32(buffer + sizeof(uint64_t), value.size());
-
-
+      builder->Add(key, value);
+      } else {
+      key = iter->key();
+      Slice value = iter->value();
       if (prev_key.empty() || options.comparator->Compare(ExtractUserKey(prev_key), ExtractUserKey(key)) != 0) {
-         builder->Add(key, value);
-        //builder->Add(key,(Slice) {buffer, sizeof(uint64_t) + sizeof(uint32_t)});
+        builder->Add(key, value);
         prev_key = key;
       }
     }
-    meta->largest.DecodeFrom(prev_key);
+    }
+    if (adgMod::KV_S==1){
+      meta->largest.DecodeFrom(key);
+    }else{
+      meta->largest.DecodeFrom(prev_key);
+    }
+
+  
 
     // Finish and check for builder errors
+    // printf("Finish table111 %d\n", meta->number);
     s = builder->Finish();
+    //  printf("Finish table222 %d\n", meta->number);
     if (s.ok()) {
       meta->file_size = builder->FileSize();
       assert(meta->file_size > 0);

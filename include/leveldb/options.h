@@ -38,7 +38,7 @@ struct LEVELDB_EXPORT Options {
   // Create an Options object with default values for all fields.
   Options();
   // -------------------
-  // if true, DataTable will use bloom filter
+ 
   bool use_datatable_bloom = true;
 
   // bloom filter bits per key. 99%
@@ -104,12 +104,13 @@ struct LEVELDB_EXPORT Options {
   // so you may wish to adjust this parameter to control memory usage.
   // Also, a larger write buffer will result in a longer recovery time
   // the next time the database is opened.
-  size_t write_buffer_size = 64 * 1024 * 1024;
+  //size_t write_buffer_size = 64 * 1024 * 1024;
 
+  size_t write_buffer_size = 4 * 1024 * 1024;
   // Number of open files that can be used by the DB.  You may need to
   // increase this if your database has a large working set (budget
   // one open file per 2MB of working set).
-  int max_open_files = 1000;
+  int max_open_files = 65536;
 
   // Control over blocks (user data is stored in a set of blocks, and
   // a block is the unit of reading from disk).
@@ -137,7 +138,8 @@ struct LEVELDB_EXPORT Options {
   // compactions and hence longer latency/performance hiccups.
   // Another reason to increase this parameter might be when you are
   // initially populating a large database.
-  size_t max_file_size = 64 * 1024 * 1024;
+  //size_t max_file_size = 64 * 1024 * 1024;
+  size_t max_file_size = 2 * 1024 * 1024;
 
   // Compress blocks using the specified compression algorithm.  This
   // parameter can be changed dynamically.
@@ -154,8 +156,8 @@ struct LEVELDB_EXPORT Options {
   // worth switching to kNoCompression.  Even if the input data is
   // incompressible, the kSnappyCompression implementation will
   // efficiently detect that and will switch to uncompressed mode.
-  CompressionType compression = kSnappyCompression;
-
+ // CompressionType compression = kSnappyCompression;
+ CompressionType compression = kNoCompression;
   // EXPERIMENTAL: If true, append to existing MANIFEST and log files
   // when a database is opened.  This can significantly speed up open.
   //

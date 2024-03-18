@@ -20,6 +20,8 @@ namespace port {
 
 // ------------------ Threading -------------------
 
+static const bool kLittleEndian = true /* or some other expression */;
+
 // A Mutex represents an exclusive lock.
 class LOCKABLE Mutex {
  public:

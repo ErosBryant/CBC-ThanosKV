@@ -79,9 +79,9 @@ else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   string(REGEX REPLACE "-fexceptions" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
 
-  # Disable RTTI.
-  string(REGEX REPLACE "-frtti" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  # # Disable RTTI.
+  # string(REGEX REPLACE "-frtti" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
 # Test whether -Wthread-safety is available. See
@@ -156,6 +156,11 @@ target_sources(leveldb
     "mod/util.cc"
     "mod/Counter.cc"
     "mod/Counter.h"
+# learned index
+    "mod/plr.h"
+    "mod/plr.cc"
+    "mod/learned_index.h"
+    "mod/learned_index.cc"
 
     "db/db_impl.cc"
     "db/db_impl.h"
