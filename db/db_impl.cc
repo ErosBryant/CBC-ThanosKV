@@ -1825,7 +1825,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else if (PM_current->Get(options, lkey, value, &stats, &s)) {
       PMtable_hits++;
     } else {
-      if (versions_sst->current()->NumFiles(0) > 0) {
+      if (versions_sst->current()->NumFiles(0) > 0||versions_sst->current()->NumFiles(1) > 0) {
         if(adgMod::KV_S == 1){
           s = BT_current->Get(options, lkey, value, &bt_stats);
         }else{
@@ -2074,6 +2074,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       break;
 
     //NumLevelFiles(config::kNumLevels-2)
+    
    } else if (allow_delay &&versions_->NumLevelFiles(config::kNumLevels-2) >=
                                    config::kL0_SlowdownWritesTrigger) {
        uint64_t start = env_->NowMicros();
